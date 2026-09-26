@@ -71,6 +71,9 @@ npm run demo:local    # same against http://localhost:8787 (run `npm run dev` fi
 ⚠️ `npm run demo` **resets the shared Railway data**. Tell the team before a rehearsal or video take.
 Demo beat: Priya's agent submits **T-4** → approve it as Sara in the UI → **T-6/T-7 unlock** → the agents (or a real Claude Code agent) pick them up.
 
+## Run demo button (Lumen startup)
+The PM can start a full demo **from the UI** (or `POST /api/demo/run` with `{"project":"lumen"}`). The server resets the data to **Lumen: AI Support Assistant** (`server/projects/lumen.json`, accounts `@lumen.test`, password `demo1234`). The agents of **Priya, John, Omar and Hassan** then finish milestone M-2 (T-5 … T-14) in three waves. A human approves each wave in Review; that unlocks the next one. It takes about 2 minutes. `GET /api/demo/status` shows progress and what is waiting for approval; `POST /api/demo/stop` stops it. The PM's login survives the reset. Stories: `server/sim/stories/lumen.json`. Spec for the UI: `docs/LOVABLE_PLAN.md` section 12.
+
 ## Simulated agents
 John, Priya and Mia are played by real MCP clients, so the board comes alive next to the real Claude Code agents:
 ```bash

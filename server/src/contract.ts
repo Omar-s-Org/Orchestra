@@ -76,3 +76,14 @@ export const KbDoc = z.object({
 });
 export const Ok = z.object({ ok: z.literal(true) });
 export const ApiError = z.object({ error: z.string() });
+
+// Run-demo button (LOVABLE_PLAN §12)
+export const DemoAccount = z.object({ email: z.string(), name: z.string(), role: Role, department: z.string(), title: z.string().nullable() });
+export const DemoStatus = z.object({
+  projects: z.array(z.string()),
+  running: z.boolean(), project: z.string().nullable(), started_at: iso.nullable(), finished_at: iso.nullable(), end_reason: z.string().nullable(),
+  cast: z.array(UserRef),
+  progress: z.object({ done: z.number(), total: z.number() }).nullable(),
+  waiting_for_approval: z.array(z.object({ id: z.string(), title: z.string() })),
+  log: z.array(z.string()),
+});

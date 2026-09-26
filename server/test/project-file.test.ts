@@ -85,6 +85,21 @@ describe("project files", () => {
     } finally { delete process.env.AGENT_KEYS; }
   });
 
+  it("reset keeps logins only for people who keep the same role", () => {
+    const db = openDb(":memory:");
+    reset(db);                                                  // Northwind: layla is the PM, john a junior
+    const pm = S.login(db, "layla@northwind.test", "demo1234").token;
+    const jr = S.login(db, "john@northwind.test", "demo1234").token;
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orch-")), "promo.json");
+    const p = mini();
+    p.people = [{ id: "layla", name: "Layla", role: "pm", department: "Mgmt" }, { id: "john", name: "John", role: "senior", department: "Eng" }, { id: "dev", name: "De V", role: "junior", department: "Eng" }];
+    p.tasks[0].workers = ["dev"]; p.tasks[1].workers = ["dev"];
+    fs.writeFileSync(file, JSON.stringify(p));
+    reset(db, file);
+    expect(S.userBySession(db, pm)?.id).toBe("layla");        // same role → still logged in
+    expect(S.userBySession(db, jr)).toBeUndefined();          // role changed → must log in again
+  });
+
   it("reset reloads the last loaded project file", () => {
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orch-")), "tiny.json");
     fs.writeFileSync(file, JSON.stringify(mini()));

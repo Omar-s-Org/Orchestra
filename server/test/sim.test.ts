@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import type { Server } from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { openDb, type DB } from "../src/db.js";
 import { reset } from "../src/seed.js";
 import { createApp } from "../src/http.js";
@@ -17,6 +19,7 @@ async function start(db: DB) {
 }
 const status = (db: DB, id: string) => (db.prepare("SELECT status FROM tasks WHERE id=?").get(id) as { status: string }).status;
 const lastUpdateId = (db: DB) => (db.prepare("SELECT COALESCE(MAX(id), 0) AS n FROM task_updates").get() as { n: number }).n;
+const LUMEN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../projects/lumen.json");
 const until = async (ok: () => boolean) => { for (let i = 0; i < 200 && !ok(); i++) await new Promise(r => setTimeout(r, 25)); return ok(); };
 
 describe("simulated agents", () => {
@@ -97,5 +100,26 @@ describe("simulated agents", () => {
     expect(status(db, "T-5")).toBe("review");
     const r = await runSim({ baseUrl: base, people: ["john"], speed: 0, reset: true, log: () => {} });
     expect(r.submitted).toBe(1); // reset put T-5 back to in_progress, so John could work it again
+  });
+
+  it("Lumen demo: four agents complete the beta milestone as a human approves each wave", async () => {
+    const db = openDb(":memory:");
+    reset(db, LUMEN);
+    const base = await start(db);
+    const sara = db.prepare("SELECT id, name, role, department FROM users WHERE id='sara'").get() as S.Ctx["user"];
+    const approver = setInterval(() => {
+      for (const t of db.prepare("SELECT id FROM tasks WHERE status='review'").all() as { id: string }[]) S.approveTask({ db, user: sara, via: "ui" }, t.id);
+    }, 20);
+    const stop = new AbortController();
+    const lines: string[] = [];
+    const run = runSim({ baseUrl: base, projectFile: LUMEN, speed: 0, loop: true, heartbeatMs: 30, signal: stop.signal, log: l => lines.push(l) });
+    const open = () => (db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE milestone_id='M-2' AND status!='done'").get() as { n: number }).n;
+    expect(await until(() => open() === 0)).toBe(true);
+    stop.abort(); clearInterval(approver);
+    expect((await run).submitted).toBe(10);
+    // All four simulated people did real work, and nothing was refused.
+    const workers = (db.prepare("SELECT DISTINCT user_id FROM task_updates WHERE via='agent' AND task_id IN (SELECT id FROM tasks WHERE milestone_id='M-2')").all() as { user_id: string }[]).map(r => r.user_id).sort();
+    expect(workers).toEqual(["hassan", "john", "omar", "priya"]);
+    expect(lines.filter(l => l.includes(" skipped: "))).toEqual([]);
   });
 });
