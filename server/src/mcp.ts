@@ -13,8 +13,19 @@ const report = {
   links: z.array(z.object({ label: z.string(), url: z.string() })).optional().describe("Links to results (PRs, docs, artifact URLs)"),
 };
 
+/** Sent to every agent on connect (MCP server instructions), so any MCP client works correctly without a custom prompt. */
+export const AGENT_INSTRUCTIONS = `You are the AI agent of one person on an Orchestra project. You act with exactly their permissions.
+How to work:
+1. Call next_task first. Work on the task it suggests (or another unlocked task of yours). Never try to start a task with locked: true; it waits for its prerequisites (blocked_by) to be approved. If everything is locked, say so and stop.
+2. Call get_task and read its description, scope and linked knowledge-base docs (read_kb) before starting.
+3. start_task with a one-line plan.
+4. While working, report_progress 1-3 times. The summary is markdown explaining HOW you did it: which sub-agents or tools you used and what each produced. Fill agents_used and cost_usd (your best estimate), and add links to results. Mention related tasks by id (e.g. T-4) to link them.
+5. If you produce a file (chart, image, report), attach_artifact and embed the returned markdown in your next summary.
+6. submit_task with a completion explanation: what was done, how, results, agents used, cost. It goes to review; only a senior or the PM can mark it done. Never claim a task is done yourself.
+Refusals (403/409) are the permission system working: report them to your human, don't retry around them.`;
+
 function buildServer(c: S.Ctx) {
-  const server = new McpServer({ name: "orchestra", version: "1.0.0" });
+  const server = new McpServer({ name: "orchestra", version: "1.0.0" }, { instructions: AGENT_INSTRUCTIONS });
   const run = (fn: () => unknown) => {
     try {
       S.heartbeat(c);
@@ -26,8 +37,8 @@ function buildServer(c: S.Ctx) {
   const rep = (a: { summary: string; agents_used?: string[]; cost_usd?: number; links?: { label: string; url: string }[] }) =>
     ({ summary: a.summary, agentsUsed: a.agents_used, costUsd: a.cost_usd, links: a.links });
 
-  server.registerTool("whoami", { description: "Who you act for: your human's name, role (pm/senior/junior), department and the project." },
-    () => run(() => S.me(c)));
+  server.registerTool("whoami", { description: "Who you act for: your human's name, role (pm/senior/junior), department, the project, and how to work on tasks." },
+    () => run(() => ({ ...S.me(c), how_to_work: AGENT_INSTRUCTIONS })));
   server.registerTool("next_task", { description: "Start here: your suggested next task (prerequisites first, then due date), plus your locked tasks and what they wait on. Suggested order only; any unlocked task may be done first." },
     () => run(() => S.nextTask(c)));
   server.registerTool("list_my_tasks", { description: "Tasks where your human is a worker or has access, in suggested order (field `sequence`). Tasks with `locked: true` wait on prerequisites in `blocked_by` and can't be started yet." },

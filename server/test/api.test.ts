@@ -61,6 +61,9 @@ describe("REST + MCP end to end", () => {
     await fetch(`${base}/api/tasks/T-4/approve`, { method: "POST", headers: { Authorization: `Bearer ${saraTok}` } });
 
     const a = await agent("ak_omar", "Omar's Claude Code");
+    // Every agent is told the workflow on connect (and again by whoami).
+    expect(a.getInstructions()).toMatch(/Call next_task first/);
+    expect(JSON.parse(text(await a.callTool({ name: "whoami", arguments: {} }))).how_to_work).toMatch(/submit_task/);
     const next = JSON.parse(text(await a.callTool({ name: "next_task", arguments: {} })));
     expect(next.next.id).toBe("T-6");
     const tools = (await a.listTools()).tools.map(t => t.name);
