@@ -104,8 +104,9 @@ audit(... unchanged, keeps allowed=0 refusals)
 ## Seed: now `server/projects/northwind.json` (format in `docs/PROJECT_FORMAT.md`)
 Tasks include `depends_on` chains and cross-mentions so the graph shows real structure on first load. Project "Northwind Launch" (fictional). PM: Layla. Seniors: Sara (Engineering), Tom (Marketing). Juniors: John, Priya (Eng); Omar, Hassan (Eng, real Claude Code); Mia (Marketing). 3 milestones, ~10 tasks spread across depts incl. one senior task hidden from juniors, 5 KB docs incl. PM-only budget. Password `demo1234`; agent keys `ak_<id>`.
 
-## Simulated agents (Hassan; `server/sim/`, `npm run sim -w server`)
-Uses `@modelcontextprotocol/sdk` client against `/mcp` with John/Priya/Mia tokens + `X-Agent-Name`. Loop per persona: pick todo task → `start_task` → 2–3 `report_progress` (explanation, agents used, cost) with 3–6 s delays → `attach_artifact` (generated SVG chart) → `submit_task`. One persona attempts a forbidden action (read PM-only doc / approve own task) to show refusal.
+## Simulated agents (Hassan; `server/sim/`, `npm run sim`)
+Uses `@modelcontextprotocol/sdk` client against `/mcp` with John/Priya/Mia agent keys + `X-Agent-Name` ("John's Claude"). People come from the project file; what each agent says comes from `server/sim/stories/<project>.json` (data, keyed by task id; tasks without a story get a generic one). Loop per persona: pick its `todo`/`in_progress` tasks (subtasks first) → `start_task` → 2–3 `report_progress` (explanation, agents used, cost) with 3–6 s delays → `attach_artifact` (generated SVG chart) → `submit_task` (embeds the chart). A task with several workers is driven by the first simulated one. Keys: `ak_<id>`, or with `AGENT_KEYS=random` the sim logs in and fetches each key from `/api/me/agent-key`. Options: `--url`, `--people`, `--speed`, `--reset` (as PM), `--project`.
+**Decided:** the demo does not stage a refusal; agents only do allowed work. The server still enforces every rule.
 
 ## Split of work (from ~19:30)
 | Who | Work |

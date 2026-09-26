@@ -1,0 +1,159 @@
+{
+  "T-5": {
+    "plan": "Improve the baseline recommender (precision@10 = 0.31): tune it, add a content-based fallback for new users, then serve it through the product API (T-4).",
+    "progress": [
+      {
+        "summary": "Ran a hyper-parameter sweep with a **data agent** (24 configs, 3 parallel workers). Best config: 64 factors, λ = 0.05, precision@10 up from 0.31 to **0.36**.",
+        "agents_used": ["data agent"],
+        "cost_usd": 1.84
+      },
+      {
+        "summary": "A **coding agent** added a content-based fallback for cold-start users (product category + price band), so new sign-ups get recommendations on day one. A **test agent** wrote 11 tests for it.",
+        "agents_used": ["coding agent", "test agent"],
+        "cost_usd": 0.97
+      },
+      {
+        "summary": "Exposed `GET /products/:id/recommendations` through the product API (T-4); p95 latency 38 ms against the nightly batch table.",
+        "agents_used": ["coding agent"],
+        "cost_usd": 0.44,
+        "links": [{ "label": "Offline evaluation notebook", "url": "https://example.com/northwind/reco-eval" }]
+      }
+    ],
+    "artifact": {
+      "name": "reco-precision.svg",
+      "chart": {
+        "title": "Recommendation model: precision@10",
+        "bars": [
+          { "label": "Baseline", "value": 0.31 },
+          { "label": "Tuned", "value": 0.36 },
+          { "label": "+ Fallback", "value": 0.38 }
+        ]
+      }
+    },
+    "completion": {
+      "explanation": "Recommendation model v1 is ready for review.\n\n{{artifact}}\n\n- **How:** a **data agent** ran the sweep, a **coding agent** built the cold-start fallback and the API endpoint, and a **test agent** covered it (11 new tests).\n- **Result:** precision@10 went from 0.31 to **0.38**, and the endpoint is live in the product API (T-4).\n- **Next:** the onboarding kit (T-9) can now explain how recommendations work.",
+      "agents_used": ["data agent", "coding agent", "test agent"],
+      "cost_usd": 0.52,
+      "links": [{ "label": "Offline evaluation notebook", "url": "https://example.com/northwind/reco-eval" }]
+    }
+  },
+
+  "T-11": {
+    "plan": "Build `GET /products/search` for the product API (T-4): full-text search on name and description, with filters for category and price.",
+    "progress": [
+      {
+        "summary": "A **coding agent** added an SQLite FTS5 index over name + description and the `/products/search?q=` endpoint, following the API conventions doc.",
+        "agents_used": ["coding agent"],
+        "cost_usd": 0.62
+      },
+      {
+        "summary": "Added category and price filters plus pagination. A **test agent** wrote 12 tests; a **review agent** caught a missing index on `category`.",
+        "agents_used": ["test agent", "review agent"],
+        "cost_usd": 0.71
+      }
+    ],
+    "artifact": {
+      "name": "search-latency.svg",
+      "chart": {
+        "title": "Search endpoint: p95 latency",
+        "unit": " ms",
+        "bars": [
+          { "label": "LIKE scan", "value": 420 },
+          { "label": "FTS5", "value": 46 },
+          { "label": "FTS5 + index", "value": 18 }
+        ]
+      }
+    },
+    "completion": {
+      "explanation": "Search endpoint done: `GET /products/search?q=&category=&max_price=&page=`.\n\n{{artifact}}\n\nA **coding agent** built it on an FTS5 index, a **test agent** added 12 tests, and a **review agent** spotted a missing index. p95 dropped from 420 ms to **18 ms** on the full 12,480-product catalog.",
+      "agents_used": ["coding agent", "test agent", "review agent"],
+      "cost_usd": 0.33
+    }
+  },
+
+  "T-4": {
+    "plan": "Finish the product API: wire search (T-11) and recommendations (T-5) into one versioned API and write the OpenAPI spec for the onboarding UI (T-6).",
+    "progress": [
+      {
+        "summary": "Merged search (T-11) and the recommendations endpoint (T-5) under `/v1`. A **docs agent** generated the OpenAPI spec from the route definitions.",
+        "agents_used": ["coding agent", "docs agent"],
+        "cost_usd": 0.58,
+        "links": [{ "label": "OpenAPI spec", "url": "https://example.com/northwind/openapi.yaml" }]
+      },
+      {
+        "summary": "A **test agent** ran the whole API suite: 47 tests green. Added rate limiting (100 req/min per key) after a **security agent** review.",
+        "agents_used": ["test agent", "security agent"],
+        "cost_usd": 0.86
+      }
+    ],
+    "completion": {
+      "explanation": "Product API v1 is complete: products, search (T-11), recommendations (T-5) and auth, all under `/v1`, with an OpenAPI spec for the onboarding UI (T-6).\n\n- **Agents:** coding, docs, test and security agents.\n- **Quality:** 47 tests green, rate limiting on, spec published.\n- Ready for integration tests (T-7).",
+      "agents_used": ["coding agent", "docs agent", "test agent", "security agent"],
+      "cost_usd": 0.41,
+      "links": [{ "label": "OpenAPI spec", "url": "https://example.com/northwind/openapi.yaml" }]
+    }
+  },
+
+  "T-9": {
+    "plan": "Write the beta onboarding kit: a setup guide and a 3-email welcome sequence, in the brand voice, explaining how recommendations work (T-5).",
+    "progress": [
+      {
+        "summary": "A **research agent** read 40 support tickets from the pilot; the top 3 questions were pairing the hub, adding rooms and \"why do I see these products?\". The guide leads with those.",
+        "agents_used": ["research agent"],
+        "cost_usd": 0.66
+      },
+      {
+        "summary": "A **copywriting agent** drafted the setup guide and 3 welcome emails in the brand voice. John's recommendation notes (T-5) became a short \"How your hub learns\" section.",
+        "agents_used": ["copywriting agent"],
+        "cost_usd": 0.49,
+        "links": [{ "label": "Onboarding guide draft", "url": "https://example.com/northwind/onboarding-guide" }]
+      },
+      {
+        "summary": "An **editor agent** checked every email against the brand voice guide and cut reading time from 4 to 2.5 minutes.",
+        "agents_used": ["editor agent"],
+        "cost_usd": 0.27
+      }
+    ],
+    "artifact": {
+      "name": "email-sequence-test.svg",
+      "chart": {
+        "title": "Welcome emails: open rate (internal test)",
+        "unit": "%",
+        "bars": [
+          { "label": "Day 0", "value": 68 },
+          { "label": "Day 2", "value": 54 },
+          { "label": "Day 5", "value": 47 }
+        ]
+      }
+    },
+    "completion": {
+      "explanation": "Onboarding kit ready: setup guide + 3-email welcome sequence.\n\n{{artifact}}\n\nA **research agent** mined pilot support tickets for the top questions, a **copywriting agent** wrote the kit, and an **editor agent** tightened it to the brand voice. Includes a plain-language explanation of recommendations from T-5. Tested on 25 internal accounts.",
+      "agents_used": ["research agent", "copywriting agent", "editor agent"],
+      "cost_usd": 0.35,
+      "links": [{ "label": "Onboarding guide", "url": "https://example.com/northwind/onboarding-guide" }]
+    }
+  },
+
+  "T-13": {
+    "plan": "Prepare the launch announcement and press kit, reusing the winning landing page copy (T-8) and the onboarding kit (T-9).",
+    "progress": [
+      {
+        "summary": "A **research agent** built a list of 30 smart-home journalists and what they covered recently; a **copywriting agent** drafted the announcement from the variant B headline (T-8).",
+        "agents_used": ["research agent", "copywriting agent"],
+        "cost_usd": 0.92
+      },
+      {
+        "summary": "Assembled the press kit: fact sheet, founder quote, 6 product shots (generated with an **image agent** from the product renders) and a one-page FAQ from T-9.",
+        "agents_used": ["image agent", "copywriting agent"],
+        "cost_usd": 1.38,
+        "links": [{ "label": "Press kit folder", "url": "https://example.com/northwind/press-kit" }]
+      }
+    ],
+    "completion": {
+      "explanation": "Launch announcement and press kit are ready for review.\n\n- **Announcement** built on the winning landing page copy (T-8).\n- **Press kit:** fact sheet, quote, 6 product images, FAQ drawn from the onboarding kit (T-9).\n- **Outreach list:** 30 journalists with personalised angles.\n\nAgents used: research, copywriting and image agents.",
+      "agents_used": ["research agent", "copywriting agent", "image agent"],
+      "cost_usd": 0.44,
+      "links": [{ "label": "Press kit folder", "url": "https://example.com/northwind/press-kit" }]
+    }
+  }
+}

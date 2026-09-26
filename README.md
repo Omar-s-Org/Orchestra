@@ -54,6 +54,15 @@ Optional header `X-Agent-Name: Omar's Claude` sets the name shown in the live vi
 
 Rules the server enforces: only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat (agent shows "active" for 60 s).
 
+## Simulated agents
+John, Priya and Mia are played by real MCP clients, so the board comes alive next to the real Claude Code agents:
+```bash
+npm run sim                          # against http://localhost:8787 (server must be running)
+npm run sim -- --reset               # reset the demo data first (as the PM), then run
+npm run sim -- --url https://<domain> --people john,mia --speed 2    # hosted, only some people, slower
+```
+Each agent picks its open tasks, starts them, reports 2–3 progress updates (explanation, agents used, cost), attaches a generated SVG chart and submits for review. It takes about a minute at `--speed 1`. What they say lives in `server/sim/stories/northwind.json`, one entry per task id.
+
 ## Integrations
 Open source (MIT). The PM can register webhooks (`POST /api/webhooks {url, events?}`) for `task.status_changed`, `task.progress`, `task.submitted`, `task.approved`, e.g. to update a CRM such as HubSpot.
 
