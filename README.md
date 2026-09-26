@@ -65,9 +65,12 @@ John, Priya and Mia are played by real MCP clients, so the board comes alive nex
 ```bash
 npm run sim                          # against http://localhost:8787 (server must be running)
 npm run sim -- --reset               # reset the demo data first (as the PM), then run
+npm run sim -- --loop                # for the demo: agents stay "active" after their work and redo it after each Reset demo; Ctrl+C stops
 npm run sim -- --url https://<domain> --people john,mia --speed 2    # hosted, only some people, slower
 ```
-Each agent picks its open tasks, starts them, reports 2–3 progress updates (explanation, agents used, cost), attaches a generated SVG chart and submits for review. It takes about a minute at `--speed 1`. What they say lives in `server/sim/stories/northwind.json`, one entry per task id.
+Each agent picks its open tasks, starts them, reports 2–3 progress updates (explanation, agents used, cost), attaches a generated SVG chart and submits for review. It takes about a minute at `--speed 1`. Without `--loop` the sim exits when done and agents turn "idle" 60 s later. What they say lives in `server/sim/stories/northwind.json`, one entry per task id.
+
+**Hosted runs:** the sim reads the project file on your machine, so it must be the same file the server loaded (`PROJECT_FILE` on Railway/Render; Northwind by default). For another project pass `--project server/projects/<file>.json`.
 
 ## Integrations
 Open source (MIT). The PM can register webhooks (`POST /api/webhooks {url, events?}`) for `task.status_changed`, `task.progress`, `task.submitted`, `task.approved`, e.g. to update a CRM such as HubSpot.

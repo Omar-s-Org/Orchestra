@@ -15,6 +15,8 @@ async function start(db: DB) {
   return `http://127.0.0.1:${(server!.address() as { port: number }).port}`;
 }
 const status = (db: DB, id: string) => (db.prepare("SELECT status FROM tasks WHERE id=?").get(id) as { status: string }).status;
+const lastUpdateId = (db: DB) => (db.prepare("SELECT COALESCE(MAX(id), 0) AS n FROM task_updates").get() as { n: number }).n;
+const until = async (ok: () => boolean) => { for (let i = 0; i < 200 && !ok(); i++) await new Promise(r => setTimeout(r, 25)); return ok(); };
 
 describe("simulated agents", () => {
   it("every story task in the demo belongs to a real task", () => {
@@ -25,12 +27,13 @@ describe("simulated agents", () => {
   it("John, Priya and Mia work their tasks over MCP and submit them for review", async () => {
     const db = openDb(":memory:"); reset(db);
     const lines: string[] = [];
+    const before = lastUpdateId(db);
     const r = await runSim({ baseUrl: await start(db), speed: 0, log: l => lines.push(l) });
 
     expect(r.submitted).toBe(5);
     for (const id of ["T-4", "T-5", "T-9", "T-11", "T-13"]) expect(status(db, id)).toBe("review");
     // T-9 has two workers; only Mia (listed first) drives it.
-    expect(db.prepare("SELECT DISTINCT user_id FROM task_updates WHERE task_id='T-9' AND created_at > datetime('now','-1 minute')").all()).toEqual([{ user_id: "mia" }]);
+    expect(db.prepare("SELECT DISTINCT user_id FROM task_updates WHERE task_id='T-9' AND id > ?").all(before)).toEqual([{ user_id: "mia" }]);
     // Updates carry the agent name, agents used and cost; the chart is embedded in the completion.
     const done = db.prepare("SELECT agent_name, agents_used, cost_usd, summary FROM task_updates WHERE task_id='T-5' AND kind='completion' ORDER BY id DESC").get() as { agent_name: string; agents_used: string; cost_usd: number; summary: string };
     expect(done.agent_name).toBe("John's Claude");
@@ -44,6 +47,25 @@ describe("simulated agents", () => {
 
     // A second run finds nothing left to do instead of failing.
     expect((await runSim({ baseUrl: `http://127.0.0.1:${(server!.address() as { port: number }).port}`, speed: 0, log: () => {} })).submitted).toBe(0);
+  });
+
+  it("--loop keeps agents online after the work and re-works tasks after a demo reset", async () => {
+    const db = openDb(":memory:"); reset(db);
+    const stop = new AbortController();
+    const run = runSim({ baseUrl: await start(db), speed: 0, loop: true, heartbeatMs: 50, signal: stop.signal, log: () => {} });
+    const allInReview = () => ["T-4", "T-5", "T-9", "T-11", "T-13"].every(id => status(db, id) === "review");
+    const seen = () => (db.prepare("SELECT last_seen FROM agent_sessions WHERE user_id='john'").get() as { last_seen: string } | undefined)?.last_seen ?? "";
+
+    expect(await until(allInReview)).toBe(true);
+    const firstSeen = seen();
+    expect(await until(() => seen() > firstSeen)).toBe(true); // heartbeat after the work is done
+
+    reset(db); // "Reset demo": tasks are open again
+    expect(status(db, "T-5")).toBe("in_progress");
+    expect(await until(allInReview)).toBe(true);
+
+    stop.abort();
+    expect((await run).submitted).toBe(10);
   });
 
   it("fetches agent keys through login when the server issues random keys", async () => {
