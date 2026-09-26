@@ -13,7 +13,13 @@ Project management where every team member works through their own AI agent. Age
 | Who does what | [`docs/Orchestra_Tracker.xlsx`](docs/Orchestra_Tracker.xlsx) |
 
 ## Hosted
-Backend + DB on Railway (see `docs/DEPLOY.md`): `https://<orchestra-api>.up.railway.app` (API under `/api`, agents under `/mcp`). Frontend on Lovable.
+| Role | URL |
+|---|---|
+| Backend primary (Railway) | `https://<railway-domain>`: API `/api`, agents `/mcp` |
+| Backend standby (Render) | `https://<render-domain>`: same paths, demo data |
+| Frontend | Lovable |
+
+Setup + failover: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Run
 ```bash

@@ -13,7 +13,7 @@ The app is **read-mostly**. Agents do the work and the UI shows it. The only hum
 
 ## 2. Hard constraints
 1. **Frontend only.** Do NOT enable Lovable Cloud, Supabase, any database or any auth provider. Our Express API is the only backend.
-2. **API base URL:** read from `localStorage.apiBase`, default **the hosted backend** `https://<orchestra-api>.up.railway.app` (the exact URL goes in `src/lib/config.ts`; the team will send it). `http://localhost:8787` is only for local development. Settings popover in the user menu to change it.
+2. **API base URLs (with failover):** `src/lib/config.ts` exports `API_BASES = [PRIMARY, BACKUP]`: the Railway URL, then the Render URL (the team sends both). A setting in the user menu can override them with one custom URL (`localStorage.apiBase`, e.g. `http://localhost:8787` for local dev). `apiBase` in this document means **the currently active base**.
 3. **All API calls go through one file, `src/lib/api.ts`,** using plain `fetch`. After login, send `Authorization: Bearer <token>` on every request. Store the token in `localStorage.token`. On any 401, clear the token and go to the login page.
 4. **Never compute permissions in the UI.** The server already filters everything. Show action buttons **only** when the task's `allowed_actions` includes them, and show nav items **only** from `me.capabilities`.
 5. **Live updates by polling:** the current page's data every **2 s**, the graph every **5 s**. Keep previous data on screen while refetching (no flicker, no spinners after the first load).
@@ -267,7 +267,7 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 - [ ] The Live agents rail and Activity feed update without reloading.
 - [ ] Connect your agent shows a copyable command.
 - [ ] Mock mode ON: everything works offline. Mock mode OFF with the backend running: the same screens work on real data.
-- [ ] In auto mode, stopping the backend switches to MOCK (with a toast) within about 10 s, and restarting it switches back to LIVE.
+- [ ] In auto mode, if the primary is unreachable, the app switches to the backup within about 10 s (toast, re-login). If both are down it switches to MOCK, and when the primary returns it switches back to LIVE · primary.
 - [ ] Board/Activity filters and the open task drawer survive a page refresh (URL query params).
 - [ ] A 401 logs out once and returns to the same page after logging in again.
 - [ ] A hard refresh of `/board?task=T-4` (logged in, LIVE) reopens the drawer with live data, and the browser's network tab shows the request going to the hosted API.
@@ -301,12 +301,12 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 
 ### Mock mode logic
 - `localStorage.mockMode` is `"auto" | "on" | "off"`, default **`"auto"`**, and can be changed in the settings popover.
-- **auto:** on start, and then every **10 s**, call `GET /api/health` with a 2 s timeout.
+- **auto:** on start, and then every **10 s**, call `GET /api/health` on the active base with a 2 s timeout. If it fails, try the next base in `API_BASES`; if one is healthy, switch to it (one toast: "Switched to backup server"). Sessions are per server, so after a switch the user must log in again: clear the token and go to `/login?next=…`.
   - Reachable → use the real API.
   - Unreachable → use mock data.
   - When the mode flips, show one toast ("Backend offline, showing mock data" / "Connected to live backend") and clear the query cache.
 - **on / off:** force mock or real mode, with no health checks.
-- A top-bar pill always shows the current source: **LIVE** (emerald) or **MOCK** (amber).
+- A top-bar pill always shows the current source: **LIVE · primary** (emerald), **LIVE · backup** (teal) or **MOCK** (amber). Hovering it shows the active URL.
 - **Login in mock mode:** the demo accounts with password `demo1234` succeed, and the token is `mock:<userId>`. Mock data must respect the same role visibility (section 3 and the checklist), so role switching can be demoed offline.
 
 ### UI defaults
