@@ -1,14 +1,4 @@
-# Orchestra
-
-## Quick start (Omar's laptop, Node 22)
-```bash
-npm install
-npm run dev          # API http://localhost:8787/api · MCP http://localhost:8787/mcp
-npm test             # 23 tests
-```
-- **Frontend (Lovable):** https://lovable.dev/projects/fff53eba-dc74-40a0-914a-cb7fcb753e27 · preview https://id-preview--fff53eba-dc74-40a0-914a-cb7fcb753e27.lovable.app
-  Open the preview in Chrome on the same machine as the server; it calls `http://localhost:8787` directly (change it in the top-bar API settings).
-- **Agent:** `claude mcp add --transport http orchestra http://localhost:8787/mcp --header "Authorization: Bearer tok_omar"`
+# Orchestra — build plan (HACK_002, submit by Sun 27 Sep 08:00 CEST)
 
 **One line:** A shared project workspace where every person's AI agent works through MCP, with scope-based access: collaborative at the bottom, a management view at the top.
 
@@ -106,3 +96,16 @@ Task fields: `id, project_id, milestone_id, parent_id, title, description, statu
 | 02:00 | M3 Admin screens, scope editor, audit, metrics. **Feature freeze 02:00** |
 | 05:00 | M4 Bug fixes only, rehearsal ×3, README |
 | 07:30 | M5 2-min video, ZIP repo, submit form (deadline 08:00) |
+
+## 7. Backend plan — Omar + Hassan (from 19:00 Sat)
+| Until | Omar | Hassan |
+|---|---|---|
+| 19:30 | Clone, `npm run dev`, connect Claude Code as `tok_omar`, run the T-57 scenario, list friction | Clone, run tests, read `permissions.ts` + `service.ts` |
+| 21:00 | MCP agent UX: `my_briefing` (tasks + scope + unread messages in one call), `read_messages`, better tool errors | **Scope on assign**: `POST /tasks` and `/assign` accept `scope: {people, documents, tasks}` in the same call (+ tests) |
+| 22:30 | Wire Lovable preview to localhost; fix field mismatches; Saad finishes remaining pages | **Project structure**: `GET /projects/:id/structure` (parts → milestones → tasks), manager creates workstream/milestone (+ tests) |
+| 00:00 | Demo steps 1–4 end to end (browser + agent live) | **A2 metrics**: review cycle time, agent vs human actions, refusals, est. time saved → `/overview.metrics` |
+| 02:00 **freeze** | Full demo 1–5 ×3 after reset | Seed story polish; README workflow map (before/after, who owns each decision) |
+| 05:00 | Bug fixes only | Bug fixes only |
+| 07:30 | Video + submit | ZIP + form check |
+
+Rules: every new endpoint goes through `service.ts` (permission check + audit) and gets a test. `npm test` green before every push. Pull before you push.
