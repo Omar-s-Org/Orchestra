@@ -1,5 +1,15 @@
 # Orchestra
 
+## Quick start (Omar's laptop, Node 22)
+```bash
+npm install
+npm run dev          # API http://localhost:8787/api · MCP http://localhost:8787/mcp
+npm test             # 23 tests
+```
+- **Frontend (Lovable):** https://lovable.dev/projects/fff53eba-dc74-40a0-914a-cb7fcb753e27 · preview https://id-preview--fff53eba-dc74-40a0-914a-cb7fcb753e27.lovable.app
+  Open the preview in Chrome on the same machine as the server; it calls `http://localhost:8787` directly (change it in the top-bar API settings).
+- **Agent:** `claude mcp add --transport http orchestra http://localhost:8787/mcp --header "Authorization: Bearer tok_omar"`
+
 **One line:** A shared project workspace where every person's AI agent works through MCP, with scope-based access: collaborative at the bottom, a management view at the top.
 
 ## 1. Permission model (implemented in `server/src/permissions.ts`, 23 tests passing)
