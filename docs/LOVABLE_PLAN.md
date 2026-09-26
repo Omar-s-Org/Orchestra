@@ -115,6 +115,10 @@ type TaskDetail = TaskSummary & {
 | GET | `/api/kb` | `?q=` | `{ id, title, excerpt, min_role: Role, author: UserRef, created_at }[]` |
 | GET | `/api/kb/:id` | none | `{ id, title, body /* markdown */, min_role, author, created_at, linked_tasks: {id,title}[] }` |
 | POST | `/api/demo/reset` | none | `{ ok: true }`. **PM only** (403 otherwise). Show the "Reset demo" button only when `me.user.role === "pm"` |
+| GET | `/api/demo/accounts` | **none (public)** | `DemoAccount[]` `{email, name, role, department, title}`, PM first. Login quick-fill (section 12) |
+| GET | `/api/demo/status` | any user | `DemoStatus` (section 12) |
+| POST | `/api/demo/run` | PM | body `{project?: "lumen", speed?: 1}` → `DemoStatus`. 409 if a run is already going, 400 on an unknown project |
+| POST | `/api/demo/stop` | PM | → `DemoStatus` |
 
 `GET /api/overview`:
 ```ts
@@ -381,3 +385,48 @@ Poll every 5 s.
    - the list of their **in-progress tasks** (clickable tiles)
 
 **Mock mode:** derive everything from the same mock tasks, overview and people (like `buildGraph()`); no separate fixtures.
+
+## 12. Run demo: one button, four agents finish a project
+**Purpose:** the PM clicks **▶ Run demo** and the whole story plays out live in about 2 minutes. The server loads the **Lumen** startup project ("Lumen: AI Support Assistant"), and the agents of **Priya, John, Omar and Hassan** (real MCP clients running on the server) finish milestone **M-2 "Beta: Lumen Assist v1"** (T-5 … T-14) in three waves. **A human approves each wave** from Review, which unlocks the next one. The run ends by itself when all 10 tasks are done.
+
+**API** (all shapes are checked by `npm run check`):
+```ts
+type DemoAccount = { email: string; name: string; role: Role; department: string; title: string | null };
+type DemoStatus = {
+  projects: string[];                 // runnable projects, e.g. ["lumen", "northwind"]
+  running: boolean;
+  project: string | null;             // last/current run
+  started_at: string | null; finished_at: string | null;
+  end_reason: string | null;          // "complete: every task is done" | "stopped" | "time limit (15 min)" | "error"
+  cast: UserRef[];                    // the 4 simulated people
+  progress: { done: number; total: number } | null;   // over the demo's tasks (10 for Lumen)
+  waiting_for_approval: { id: string; title: string }[];  // demo tasks in review right now
+  log: string[];                      // last 20 simulator lines, newest last
+};
+```
+- `POST /api/demo/run` `{ project: "lumen", speed: 1 }` (PM only). Speed is a delay multiplier: 1 = about 2 min with prompt approvals. Don't expose it; always send 1.
+- `POST /api/demo/stop` (PM only). Agents stop; the data stays where it is.
+- `GET /api/demo/status` (any logged-in user). **Poll every 2 s while `running`**, every 10 s otherwise.
+- `GET /api/demo/accounts` (**no token**): the accounts of the project currently loaded.
+
+**Important:** starting a run **resets the data** to Lumen: new tasks, new people, and emails at `@lumen.test` (password `demo1234`). **The PM stays logged in** (sessions survive the reset for people with the same id and role). After `run` returns: **drop every cached query** (tasks, overview, graph, KB, me) and refetch. Otherwise the UI shows stale Northwind data.
+
+**UI:**
+1. **Top bar, PM only** (`me.user.role === "pm"`): a primary emerald button **▶ Run demo**. Click → a confirm dialog: *"Reset the data to the Lumen startup and let Priya, John, Omar and Hassan's agents finish the beta. You approve each wave in Review. Takes about 2 minutes."* [Cancel] [Run demo]. The confirm is needed because the reset is destructive.
+2. **While running**, the button becomes a **status pill**: `● Demo running · 4/10 · Stop` (with a pulsing emerald dot). Stop calls `/api/demo/stop`. Non-PM users see the same pill without Stop.
+3. **Approval nudge:** when `waiting_for_approval` is non-empty, show a yellow badge on the **Review** nav item with the count, and a toast once per new task id: *"T-6 Ticket API is waiting for your approval"* [Review →]. **This is the human-in-the-loop beat. Make it obvious.**
+4. **Cast strip** (in the pill's popover or under the Board header while running): the 4 cast avatars with their live status from `GET /api/agents/live`.
+5. **Live log** (optional, in the pill's popover): the last 5 `log` lines in a monospace list.
+6. **Finish:** when `running` flips to false with `end_reason` starting with `complete`, show a success toast: *"Demo complete: the beta milestone shipped. Open the graph or Company view."* [Graph] [Company]. For other reasons show a neutral toast with `end_reason`.
+7. **Login page quick-fill:** fetch `GET /api/demo/accounts` (no token). Render a small "Demo accounts" list under the form (name · role badge · department). Clicking one fills the email and `demo1234`. It picks up the Lumen emails automatically after a run. **Mock mode:** use the section 7 accounts.
+
+**Mock mode:** `run` sets `running: true` and advances one mock task per poll through in_progress → review. Mock "approve" moves it to done; stop after 10. Keep it simple: this is only a fallback.
+
+**Suggested video beats** (about 2 min): PM clicks Run → the Board fills with 4 agents working (wave 1: T-5 ingestion, T-6 ticket API, T-7 widget, T-8 CI) → toasts "waiting for approval" → approve in Review → wave 2 unlocks (T-9 answer engine, T-10 hand-off, T-11 live answers, T-12 eval harness) → approve → wave 3 (T-13 go/no-go, T-14 tuning) → approve → "Demo complete" → open the **Graph** (mentions and prerequisites light up) → **Company view** (tiles all green on M-2; T-16 overdue with a red ring on M-3).
+
+**Acceptance:**
+- [ ] Only the PM sees ▶ Run demo and Stop; a junior gets no button, but sees the pill while a run is going.
+- [ ] After Run, the board shows Lumen tasks without a manual refresh, and the PM is still logged in.
+- [ ] Each submit shows up within 2 s as a Review badge and toast; approving unlocks the next wave.
+- [ ] The run ends by itself with "Demo complete" at 10/10.
+- [ ] The login quick-fill lists `@lumen.test` accounts after a run.
