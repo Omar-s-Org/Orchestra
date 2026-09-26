@@ -18,7 +18,7 @@ export type Story = {
   completion: { explanation: string; agents_used?: string[]; cost_usd?: number; links?: Link[] }; // "{{artifact}}" embeds the chart
 };
 type Person = ProjectFile["people"][number];
-type TaskInfo = { id: string; title: string; status: string; parent_id: string | null; description?: string; docs?: { id: string; readable: boolean }[] };
+type TaskInfo = { id: string; title: string; status: string; parent_id: string | null; locked?: boolean; blocked_by?: { id: string; status: string }[]; description?: string; docs?: { id: string; readable: boolean }[] };
 
 export type SimOptions = {
   baseUrl: string;             // e.g. http://localhost:8787 or the Railway URL
@@ -110,9 +110,18 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
     if (r.isError) throw new Error(text.replace(/^Error:\s*/, ""));
     return JSON.parse(text) as T;
   };
-  const openTasks = async () => (await call<TaskInfo[]>("list_my_tasks"))
-    .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"))
-    .sort(workOrder);
+  // Locked tasks wait until their prerequisites are approved (the server would refuse them anyway).
+  // Each wait is logged once; in --loop mode the agent picks the task up as soon as it unlocks.
+  const announced = new Set<string>();
+  const openTasks = async () => {
+    const open = (await call<TaskInfo[]>("list_my_tasks"))
+      .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"));
+    for (const t of open.filter(t => t.locked && !announced.has(t.id))) {
+      announced.add(t.id);
+      log(`${t.id} waiting: locked until ${t.blocked_by!.map(b => `${b.id} (${b.status})`).join(", ")} is done`);
+    }
+    return open.filter(t => !t.locked).sort(workOrder);
+  };
 
   async function workOpenTasks(queue: TaskInfo[]) {
     let done = 0;
@@ -153,18 +162,18 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
   }
 
   const first = await openTasks();
-  if (!first.length) log(o.loop ? "nothing to do yet; staying online" : "nothing to do (all my tasks are in review or done; reset the demo to run again)");
+  if (!first.length) log(o.loop ? "nothing to do yet; staying online" : "nothing to do right now (tasks are locked, in review or done; approve prerequisites or reset the demo)");
   let done = await workOpenTasks(first);
 
-  // --loop: every call is a heartbeat, so checking for work every ~30 s keeps the agent green in the live rail,
-  // and after a "Reset demo" its tasks are open again, so it simply works them again.
+  // --loop: every call is a heartbeat, so checking for work every ~30 s keeps the agent green in the live rail.
+  // New work shows up when a prerequisite gets approved (task unlocks) or after a "Reset demo".
   if (o.loop) {
     while (!o.signal?.aborted) {
       await sleep(o.heartbeatMs, o.signal);
       if (o.signal?.aborted) break;
       try {
         const queue = await openTasks();
-        if (queue.length) { log(`${queue.length} open task(s) again (demo reset?); back to work`); done += await workOpenTasks(queue); }
+        if (queue.length) { log(`${queue.length} task(s) ready (unlocked or demo reset); back to work`); done += await workOpenTasks(queue); }
       } catch (e) {
         log(`heartbeat failed, retrying: ${(e as Error).message}`); // e.g. the server restarted
       }

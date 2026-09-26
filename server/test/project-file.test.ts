@@ -62,6 +62,12 @@ describe("project files", () => {
     expect(() => validateProject(bad)).toThrow(/tasks\.0\.due: use YYYY-MM-DD/);
   });
 
+  it("rejects circular prerequisites", () => {
+    const bad = mini();
+    (bad.tasks[0] as { depends_on?: string[] }).depends_on = ["T-2"]; // T-2 already depends on T-1
+    expect(() => validateProject(bad)).toThrow(/circular prerequisites T-\d → T-\d → T-\d/);
+  });
+
   it("requires at least one PM", () => {
     const bad = mini();
     bad.people[0].role = "junior";

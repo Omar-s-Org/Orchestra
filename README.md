@@ -50,6 +50,7 @@ Optional header `X-Agent-Name: Omar's Claude` sets the name shown in the live vi
 | Tool | Args | Effect |
 |---|---|---|
 | `whoami` | none | your person, role, department, project |
+| `next_task` | none | **start here**: your suggested next unlocked task + your locked tasks and what they wait on |
 | `list_my_tasks` / `team_board` | `status?` | tasks you work on / everything you may see |
 | `get_task` | `task_id` | full task incl. dependencies, docs, updates |
 | `start_task` | `task_id, plan` | todo → in_progress; shows you live |
@@ -58,7 +59,7 @@ Optional header `X-Agent-Name: Omar's Claude` sets the name shown in the live vi
 | `submit_task` | `task_id, explanation, agents_used?, cost_usd?, links?` | → review (a senior/PM approves in the UI) |
 | `search_kb` / `read_kb` | `query?` / `doc_id` | knowledge base, filtered by clearance |
 
-Rules the server enforces: only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat (agent shows "active" for 60 s).
+Rules the server enforces: a task is **locked** until all its prerequisites (`depends_on`) are **done** (approved), so it can't be started, reported on or submitted before then; tasks come in a suggested order (`sequence`: prerequisites first, then due date), but any unlocked task may be done first; only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat (agent shows "active" for 60 s).
 
 ## Simulated agents
 John, Priya and Mia are played by real MCP clients, so the board comes alive next to the real Claude Code agents:
@@ -73,7 +74,7 @@ Each agent picks its open tasks, starts them, reports 2–3 progress updates (ex
 **Hosted runs:** the sim reads the project file on your machine, so it must be the same file the server loaded (`PROJECT_FILE` on Railway/Render; Northwind by default). For another project pass `--project server/projects/<file>.json`.
 
 ## Integrations
-Open source (MIT). The PM can register webhooks (`POST /api/webhooks {url, events?}`) for `task.status_changed`, `task.progress`, `task.submitted`, `task.approved`, e.g. to update a CRM such as HubSpot.
+Open source (MIT) with an **open plug**: the documented REST API, the MCP server (any MCP-capable agent), and outbound webhooks (`POST /api/webhooks {url, events?}` as PM) for `task.status_changed`, `task.progress`, `task.submitted`, `task.approved`. No specific tool is built in; anything can subscribe later.
 
 ## Layout
 ```

@@ -1,5 +1,6 @@
 // One visibility rule for every endpoint (REST and MCP). The UI never decides permissions.
 import type { DB } from "./db.js";
+import { loadOrder, type Order } from "./ordering.js";
 
 export type Role = "pm" | "senior" | "junior";
 export type Status = "todo" | "in_progress" | "review" | "done";
@@ -11,6 +12,8 @@ export class HttpError extends Error { constructor(public status: number, messag
 export class Forbidden extends HttpError { constructor(m: string) { super(403, m); } }
 export class NotFound extends HttpError { constructor(m: string) { super(404, m); } }
 export class BadRequest extends HttpError { constructor(m: string) { super(400, m); } }
+/** The task exists and you may work on it, but its prerequisites aren't done yet. */
+export class Locked extends HttpError { constructor(m: string) { super(409, m); } }
 
 type Row = { task_id: string };
 
@@ -20,6 +23,7 @@ export type Index = {
   workers: Map<string, string[]>;
   access: Map<string, string[]>;
   roles: Map<string, Role>;
+  order: Order;
 };
 
 export function loadIndex(db: DB): Index {
@@ -33,6 +37,7 @@ export function loadIndex(db: DB): Index {
     workers: group(db.prepare("SELECT task_id, user_id AS v FROM task_people WHERE relation='worker'").all() as (Row & { v: string })[]),
     access: group(db.prepare("SELECT task_id, user_id AS v FROM task_people WHERE relation='access'").all() as (Row & { v: string })[]),
     roles: new Map((db.prepare("SELECT id, role FROM users").all() as { id: string; role: Role }[]).map(r => [r.id, r.role])),
+    order: loadOrder(db),
   };
 }
 

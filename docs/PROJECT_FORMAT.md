@@ -37,7 +37,7 @@ The loader checks every reference and prints **all** problems at once (unknown p
       "departments": ["Engineering"],
       "workers": ["john"],              // who works on it (their agents can start/report/submit)
       "access": ["tom"],                // extra people who can view it
-      "depends_on": ["T-3"],            // prerequisites → arrows in the PM graph
+      "depends_on": ["T-3"],            // prerequisites: the task is LOCKED until these are done (approved); also sets the suggested order and the graph arrows. No loops.
       "docs": ["K-2"],                  // linked knowledge-base docs
       "parent": "T-4",                  // optional: makes it a subtask
       "description": "Serve results through the product API (T-4).",   // mentioning T-4 links the tasks

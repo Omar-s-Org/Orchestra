@@ -50,7 +50,22 @@ describe("REST + MCP end to end", () => {
     const port = (hookServer.address() as { port: number }).port;
     await fetch(`${base}/api/webhooks`, { method: "POST", headers: { Authorization: `Bearer ${pm}`, "Content-Type": "application/json" }, body: JSON.stringify({ url: `http://127.0.0.1:${port}/hook` }) });
 
+    // T-6 is locked behind T-4: Priya's agent submits T-4, Sara approves, then Omar's agent can start.
+    const priya = await agent("ak_priya", "Priya's Claude");
+    const locked = await (await agent("ak_omar", "probe")).callTool({ name: "start_task", arguments: { task_id: "T-6", plan: "x" } });
+    expect(locked.isError).toBe(true);
+    expect(text(locked)).toMatch(/locked until its prerequisites are done: T-4/);
+    await priya.callTool({ name: "submit_task", arguments: { task_id: "T-4", explanation: "Product API complete with search and recommendations." } });
+    await priya.close();
+    const saraTok = await login("sara@northwind.test");
+    await fetch(`${base}/api/tasks/T-4/approve`, { method: "POST", headers: { Authorization: `Bearer ${saraTok}` } });
+
     const a = await agent("ak_omar", "Omar's Claude Code");
+    // Every agent is told the workflow on connect (and again by whoami).
+    expect(a.getInstructions()).toMatch(/Call next_task first/);
+    expect(JSON.parse(text(await a.callTool({ name: "whoami", arguments: {} }))).how_to_work).toMatch(/submit_task/);
+    const next = JSON.parse(text(await a.callTool({ name: "next_task", arguments: {} })));
+    expect(next.next.id).toBe("T-6");
     const tools = (await a.listTools()).tools.map(t => t.name);
     expect(tools).toEqual(expect.arrayContaining(["start_task", "report_progress", "attach_artifact", "submit_task", "search_kb"]));
     await a.callTool({ name: "start_task", arguments: { task_id: "T-6", plan: "Build the sign-up screen" } });
