@@ -17,9 +17,9 @@ The app is **read-mostly**. Agents do the work and the UI shows it. The only hum
 3. **All API calls go through one file, `src/lib/api.ts`,** using plain `fetch`. After login, send `Authorization: Bearer <token>` on every request. Store the token in `localStorage.token`. On any 401, clear the token and go to the login page.
 4. **Never compute permissions in the UI.** The server already filters everything. Show action buttons **only** when the task's `allowed_actions` includes them, and show nav items **only** from `me.capabilities`.
 5. **Live updates by polling:** the current page's data every **2 s**, the graph every **5 s**. Keep previous data on screen while refetching (no flicker, no spinners after the first load).
-6. **Mock mode** (`localStorage.mock = "true"`, toggle in the settings popover, **ON by default until the backend is reachable**): `api.ts` returns data from `src/lib/mock.ts`, using the exact shapes in section 4. Make the mock data rich and consistent (Northwind project, section 7) and let it change slightly on each poll (a live agent's activity text, a new activity item), so the live UI can be demoed without the backend.
+6. **Mock mode:** `api.ts` can serve every endpoint from `src/lib/mock.ts`, using the exact shapes in section 4. See **section 10** for when it switches on. The mock data must be rich and consistent (Northwind project, section 7) and change slightly on each poll (a live agent's activity text, a new activity item), so the live UI can be demoed without the backend. Mock must implement the same query filters as the real API.
 7. Errors come back as `{ "error": "message" }` with status 400/401/403/404. Show them in a toast; show 403 messages in amber (they explain permission refusals).
-8. Libraries: React + TypeScript + Tailwind + shadcn/ui (Lovable default), `react-force-graph-2d` for the graph, `react-markdown` for explanations, `lucide-react` for icons.
+8. Libraries: React + TypeScript + Tailwind + shadcn/ui (Lovable default), `react-force-graph-2d` for the graph, `react-markdown` + `remark-gfm` for explanations, `lucide-react` for icons, TanStack Query for data and polling, React Router for routes, `sonner` (shadcn) for toasts, `date-fns` for times. Routing, state and UI defaults are fixed in **section 10**; don't improvise them.
 
 ## 3. Roles and navigation (one app, not one app per role)
 There is **one** layout for everyone. What changes per role comes only from the API:
@@ -69,7 +69,13 @@ type Update = {                  // one agent/human report on a task
 };
 
 type Artifact = { id: string; name: string; mime: string; url: string; user: UserRef; created_at: string };
-// url is relative ("/api/artifacts/ab12cd"); display it with `${apiBase}${url}?token=${token}` (so <img src> works)
+// url is relative ("/api/artifacts/ab12cd"); display it with `${apiBase}${url}?token=${token}` (so <img src> works).
+// DEMO-ONLY: a token in a URL can leak via logs/history. Production would use short-lived signed URLs.
+
+type ReviewItem = TaskSummary & {          // used by the Review page; no per-task fetch needed
+  latest_completion: Update | null;         // the most recent kind="completion" update
+  artifacts: Artifact[];
+};
 
 type TaskDetail = TaskSummary & {
   description: string;           // markdown
@@ -92,11 +98,11 @@ type TaskDetail = TaskSummary & {
 | GET | `/api/health` | none | `{ ok: true }` (no auth) |
 | GET | `/api/me` | none | `{ user, capabilities: { graph: boolean, review: boolean, cost: boolean }, project: { id, name, description } }` |
 | GET | `/api/me/agent-key` | none | `{ agent_key, mcp_url, command }`, where `command` is a ready-to-copy `claude mcp add …` line |
-| GET | `/api/tasks` | `?status=&department=&mine=true` | `TaskSummary[]` |
+| GET | `/api/tasks` | `?status=&department=&person=<userId>&mine=true` (all optional, combinable) | `TaskSummary[]` |
 | GET | `/api/tasks/:id` | none | `TaskDetail` |
 | POST | `/api/tasks/:id/approve` | `{ note? }` | `TaskDetail` (review → done) |
 | POST | `/api/tasks/:id/reopen` | `{ note }` | `TaskDetail` (review → in_progress) |
-| GET | `/api/activity` | `?limit=50&task=` | `Update[]` newest first |
+| GET | `/api/activity` | `?limit=50&task=&via=agent\|ui&kind=progress\|completion\|approval\|status` (all optional) | `Update[]` newest first |
 | GET | `/api/agents/live` | none | `{ user: UserRef, agent_name: string, status: "active" \| "idle", task: {id,title} \| null, activity: string, last_seen: string }[]` |
 | GET | `/api/overview` | none | see below |
 | GET | `/api/graph` | none | see section 6 (PM only; others get 403) |
@@ -109,7 +115,7 @@ type TaskDetail = TaskSummary & {
 {
   milestones: { id: string; name: string; due: string; total: number; done: number; pct: number }[];
   by_status: { todo: number; in_progress: number; review: number; done: number };
-  review_queue: TaskSummary[];                       // tasks in review I can approve (empty for juniors)
+  review_queue: ReviewItem[];                        // tasks in review I can approve (empty for juniors)
   cost: null | {                                     // null when capabilities.cost is false
     total_usd: number;
     by_department: { department: string; cost_usd: number }[];
@@ -134,7 +140,7 @@ See section 6.
 
 ### 5.4 Board (everyone)
 - Header: status count chips (from `by_status`). If `capabilities.cost` is true, add **cost tiles**: total cost, plus a mini bar list of cost by department (PM) or by person (senior).
-- Filter chips: department, person, "Mine" (`mine=true`).
+- Filter chips: department, person, "Mine". These are **server-side** filters: pass them as `department`, `person` and `mine` query params, and sync them to the URL (section 10).
 - **Kanban**, 4 columns: To do · In progress · Review · Done. Each card shows the id, title, milestone name, department tags, worker avatars, and cost. If `live` is set, add a pulsing border and "🤖 {agent_name}: {activity}". Subtasks appear indented under their parent with a small "↳".
 - Clicking a card opens the **task drawer**.
 
@@ -152,13 +158,13 @@ See section 6.
    Juniors never see these.
 
 ### 5.6 Activity (everyone)
-A full-page feed from `/api/activity`, newest first, in the same card design as the timeline but with the task title as a link. Filter chips: agent only / human only / completions only. New items slide in at the top.
+A full-page feed from `/api/activity`, newest first, in the same card design as the timeline but with the task title as a link. Filter chips: Agent only (`via=agent`), Human only (`via=ui`), Completions (`kind=completion`). These are **server-side** query params synced to the URL. New items slide in at the top.
 
 ### 5.7 Knowledge (everyone)
 A search box, then a list of docs (title, excerpt, author, date, and a role badge if `min_role` is above junior). Clicking opens a reader view (markdown body plus "Linked tasks").
 
 ### 5.8 Review (senior + PM, only if `capabilities.review`)
-A list of `review_queue` tasks. Each row shows the latest **completion** summary (markdown, collapsed to 4 lines with an expand control), the cost, and the artifacts, with **Approve** and **Send back** buttons. This is the human-in-the-loop moment of the demo.
+A list of `review_queue` items (`ReviewItem`, section 4; no extra fetches). Each row shows the latest **completion** summary (markdown, collapsed to 4 lines with an expand control), the cost, and the artifacts, with **Approve** and **Send back** buttons. This is the human-in-the-loop moment of the demo.
 
 ## 6. Project graph (PM only)
 **Purpose:** show the PM how the project fits together and **who is working together**. Every node and edge comes from the API.
@@ -205,6 +211,14 @@ A list of `review_queue` tasks. Each row shows the latest **completion** summary
   - Double-click the background → reset.
 - **Toolbar** above the canvas: department filter, status filter, edge-type toggles (Dependencies / Mentions / People), and a "Fit" button. Keep node positions stable across polls: merge new data into the existing graph objects instead of replacing them, so the layout doesn't jump.
 - Legend in the bottom-left corner.
+- **Mock graph:** in mock mode, `mock.ts` exposes `buildGraph()` that **derives** nodes and edges from the same mock project, milestones, tasks and people. Never hand-write a separate graph. The rules are:
+  - one `project` node
+  - `contains`: project→each milestone, and milestone→each top-level task
+  - `subtask`: parent→child
+  - `depends_on`: from each task's `depends_on` list
+  - `mentions`: from each task's `mentions` list, de-duplicated so A↔B is one edge
+  - `works_on`: each worker→task
+  - `live`: true if the task's `live` is set or the person has an active agent
 
 ## 7. Demo data (use for `mock.ts`; the backend seeds the same)
 Project **"Northwind Launch"**: launch of a new product line, run with AI agents.
@@ -247,3 +261,54 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 - [ ] The Live agents rail and Activity feed update without reloading.
 - [ ] Connect your agent shows a copyable command.
 - [ ] Mock mode ON: everything works offline. Mock mode OFF with the backend running: the same screens work on real data.
+- [ ] In auto mode, stopping the backend switches to MOCK (with a toast) within about 10 s, and restarting it switches back to LIVE.
+- [ ] Board/Activity filters and the open task drawer survive a page refresh (URL query params).
+- [ ] A 401 logs out once and returns to the same page after logging in again.
+
+## 10. App architecture and UI defaults (fixed decisions; don't guess)
+
+### Routes (React Router)
+| Path | Page | Guard |
+|---|---|---|
+| `/login` | Login | public; if already logged in, go to landing |
+| `/graph` | Graph | auth + `capabilities.graph`, else redirect `/board` |
+| `/board` | Board | auth |
+| `/activity` | Activity | auth |
+| `/knowledge`, `/knowledge/:id` | Knowledge list / reader | auth |
+| `/review` | Review | auth + `capabilities.review`, else redirect `/board` |
+| `/` | redirect to landing (section 3) | auth |
+
+- **Task drawer** = the query param `?task=T-12` on any page. It is deep-linkable, and closing it removes the param.
+- **Filters** live in query params too (e.g. `/board?department=Engineering&person=john`), so a refresh keeps them.
+- **Auth guard:** with no token, redirect to `/login?next=<current path>`, and return there after login.
+
+### Data layer
+- `api.ts` has one `request()` function. It adds the bearer token, parses `{error}`, and throws `ApiError(status, message)`. **On 401**, it clears the token, clears the query cache and navigates to `/login`, one time only (guard against a redirect loop).
+- **Polling** with TanStack Query: `useQuery({ refetchInterval: 2000, placeholderData: keepPreviousData, refetchIntervalInBackground: false })`. The graph uses 5000. `/api/me` loads once after login and whenever the user changes.
+- Mutations (approve / send back) invalidate the `tasks`, `overview`, `activity` and `task:<id>` queries.
+- **Errors:** one `ErrorBoundary` per page with a "Retry" button. Query errors show inline (not a toast storm): one toast per distinct message.
+
+### Mock mode logic
+- `localStorage.mockMode` is `"auto" | "on" | "off"`, default **`"auto"`**, and can be changed in the settings popover.
+- **auto:** on start, and then every **10 s**, call `GET /api/health` with a 2 s timeout.
+  - Reachable → use the real API.
+  - Unreachable → use mock data.
+  - When the mode flips, show one toast ("Backend offline, showing mock data" / "Connected to live backend") and clear the query cache.
+- **on / off:** force mock or real mode, with no health checks.
+- A top-bar pill always shows the current source: **LIVE** (emerald) or **MOCK** (amber).
+- **Login in mock mode:** the demo accounts with password `demo1234` succeed, and the token is `mock:<userId>`. Mock data must respect the same role visibility (section 3 and the checklist), so role switching can be demoed offline.
+
+### UI defaults
+- **Dark mode:** a sun/moon toggle in the top bar, stored in `localStorage.theme`. The graph canvas is always dark.
+- **Toasts:** `sonner`, bottom-right. 403 messages use the amber/warning style.
+- **Right rail (Live agents):** at 1440px and wider, a fixed 320px column. Below 1440px, it collapses to an icon button in the top bar with a badge counting active agents, which opens the rail as a sheet.
+- **Relative times:** `formatDistanceToNowStrict(date, { addSuffix: true })` ("12 seconds ago"), with the absolute time in the `title` tooltip.
+- **Money:** `$0.42`, or `$12.30` when the total is $10 or more.
+- **Markdown security:** use `react-markdown` + `remark-gfm` **without `rehype-raw`**, so raw HTML is never rendered. Links open in a new tab with `rel="noopener noreferrer"`. Images render only when their URL starts with `apiBase` (artifacts) or, in mock mode, a bundled placeholder; any other image shows as a link.
+- **Empty states** (icon + one line + optional hint):
+  - Board: "No tasks match these filters."
+  - Activity: "No activity yet. Updates appear here when agents report progress."
+  - Review: "Nothing waiting for review."
+  - Live agents: "No agents active right now."
+  - Knowledge: "No documents found."
+- **Loading:** skeletons on first load only; after that, keep the previous data while polling.

@@ -4,3 +4,4 @@ data/
 *.sqlite
 dist/
 docs/*.zip
+.claude/settings.local.json
