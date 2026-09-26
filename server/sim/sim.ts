@@ -26,8 +26,19 @@ export type SimOptions = {
   people?: string[];           // person ids to simulate; default: everyone who has a story
   speed?: number;              // delay multiplier: 1 = 3–6 s between steps, 0 = no delays (tests)
   reset?: boolean;             // reset the demo data first (logs in as the PM)
+  loop?: boolean;              // stay online after the work is done: heartbeat, and pick up tasks again after a reset
+  heartbeatMs?: number;        // how often a looping agent checks in (default 30 s; the live view drops agents after 60 s)
+  signal?: AbortSignal;        // stops a looping run (Ctrl+C in run.ts)
   log?: (line: string) => void;
 };
+
+/** setTimeout that ends early (without throwing) when the run is stopped. */
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>(resolve => {
+  if (signal?.aborted) return resolve();
+  const t = setTimeout(done, ms);
+  function done() { clearTimeout(t); signal?.removeEventListener("abort", done); resolve(); }
+  signal?.addEventListener("abort", done);
+});
 
 const SIM_DIR = path.dirname(fileURLToPath(import.meta.url));
 const firstName = (p: Person) => p.name.split(" ")[0];
@@ -81,11 +92,13 @@ async function agentKey(baseUrl: string, p: Person) {
 const workOrder = (a: TaskInfo, b: TaskInfo) =>
   Number(!a.parent_id) - Number(!b.parent_id) || Number(a.status !== "in_progress") - Number(b.status !== "in_progress");
 
-async function runAgent(o: Required<Omit<SimOptions, "projectFile" | "people" | "reset">>, p: Person, owned: Set<string>, stories: Record<string, Story>, startDelay: number) {
+type AgentOptions = { baseUrl: string; speed: number; log: (line: string) => void; loop: boolean; heartbeatMs: number; signal?: AbortSignal };
+
+async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories: Record<string, Story>, startDelay: number) {
   const name = `${firstName(p)}'s Claude`;
   const log = (msg: string) => o.log(`[${name}] ${msg}`);
-  const pause = (min = 3000, max = 6000) => new Promise(r => setTimeout(r, (min + Math.random() * (max - min)) * o.speed));
-  await new Promise(r => setTimeout(r, startDelay * o.speed));
+  const pause = (min = 3000, max = 6000) => sleep((min + Math.random() * (max - min)) * o.speed, o.signal);
+  await sleep(startDelay * o.speed, o.signal);
 
   const client = new Client({ name: "orchestra-sim", version: "1.0.0" });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${o.baseUrl}/mcp`), {
@@ -97,51 +110,76 @@ async function runAgent(o: Required<Omit<SimOptions, "projectFile" | "people" | 
     if (r.isError) throw new Error(text.replace(/^Error:\s*/, ""));
     return JSON.parse(text) as T;
   };
-
-  const queue = (await call<TaskInfo[]>("list_my_tasks"))
+  const openTasks = async () => (await call<TaskInfo[]>("list_my_tasks"))
     .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"))
     .sort(workOrder);
-  if (!queue.length) log("nothing to do (all my tasks are in review or done; reset the demo to run again)");
 
-  let done = 0;
-  for (const { id } of queue) {
-    try {
-      const task = await call<TaskInfo>("get_task", { task_id: id });
-      if (task.status !== "todo" && task.status !== "in_progress") continue;
-      const story = stories[id] ?? genericStory(task);
-      const doc = task.docs?.find(d => d.readable);
-      if (doc) await call("read_kb", { doc_id: doc.id });
+  async function workOpenTasks(queue: TaskInfo[]) {
+    let done = 0;
+    for (const { id } of queue) {
+      if (o.signal?.aborted) break;
+      try {
+        const task = await call<TaskInfo>("get_task", { task_id: id });
+        if (task.status !== "todo" && task.status !== "in_progress") continue;
+        const story = stories[id] ?? genericStory(task);
+        const doc = task.docs?.find(d => d.readable);
+        if (doc) await call("read_kb", { doc_id: doc.id });
 
-      await call("start_task", { task_id: id, plan: story.plan });
-      log(`${id} started: ${task.title}`);
-      await pause();
-      for (const step of story.progress) {
-        await call("report_progress", { task_id: id, ...step });
-        log(`${id} progress: ${step.summary.slice(0, 80)}…`);
+        await call("start_task", { task_id: id, plan: story.plan });
+        log(`${id} started: ${task.title}`);
         await pause();
+        for (const step of story.progress) {
+          await call("report_progress", { task_id: id, ...step });
+          log(`${id} progress: ${step.summary.slice(0, 80)}…`);
+          await pause();
+        }
+        let embed = "";
+        if (story.artifact) {
+          const a = await call<{ url: string; markdown: string }>("attach_artifact", { task_id: id, name: story.artifact.name, mime: "image/svg+xml", text: chartSvg(story.artifact.chart) });
+          embed = a.markdown;
+          log(`${id} attached ${story.artifact.name} → ${a.url}`);
+          await pause(1500, 3000);
+        }
+        const { explanation, ...rest } = story.completion;
+        await call("submit_task", { task_id: id, explanation: explanation.replace("{{artifact}}", embed).replace(/\n{3,}/g, "\n\n").trim(), ...rest });
+        log(`${id} submitted for review`);
+        done++;
+        await pause();
+      } catch (e) {
+        log(`${id} skipped: ${(e as Error).message}`);
       }
-      let embed = "";
-      if (story.artifact) {
-        const a = await call<{ url: string; markdown: string }>("attach_artifact", { task_id: id, name: story.artifact.name, mime: "image/svg+xml", text: chartSvg(story.artifact.chart) });
-        embed = a.markdown;
-        log(`${id} attached ${story.artifact.name} → ${a.url}`);
-        await pause(1500, 3000);
-      }
-      const { explanation, ...rest } = story.completion;
-      await call("submit_task", { task_id: id, explanation: explanation.replace("{{artifact}}", embed).replace(/\n{3,}/g, "\n\n").trim(), ...rest });
-      log(`${id} submitted for review`);
-      done++;
-      await pause();
-    } catch (e) {
-      log(`${id} skipped: ${(e as Error).message}`);
     }
+    return done;
+  }
+
+  const first = await openTasks();
+  if (!first.length) log(o.loop ? "nothing to do yet; staying online" : "nothing to do (all my tasks are in review or done; reset the demo to run again)");
+  let done = await workOpenTasks(first);
+
+  // --loop: every call is a heartbeat, so checking for work every ~30 s keeps the agent green in the live rail,
+  // and after a "Reset demo" its tasks are open again, so it simply works them again.
+  if (o.loop) {
+    while (!o.signal?.aborted) {
+      await sleep(o.heartbeatMs, o.signal);
+      if (o.signal?.aborted) break;
+      try {
+        const queue = await openTasks();
+        if (queue.length) { log(`${queue.length} open task(s) again (demo reset?); back to work`); done += await workOpenTasks(queue); }
+      } catch (e) {
+        log(`heartbeat failed, retrying: ${(e as Error).message}`); // e.g. the server restarted
+      }
+    }
+    log("going offline");
   }
   await client.close();
   return done;
 }
 
 export async function runSim(opts: SimOptions) {
-  const o = { baseUrl: opts.baseUrl.replace(/\/+$/, ""), speed: opts.speed ?? 1, log: opts.log ?? console.log };
+  const o: AgentOptions = {
+    baseUrl: opts.baseUrl.replace(/\/+$/, ""), speed: opts.speed ?? 1, log: opts.log ?? console.log,
+    loop: opts.loop ?? false, heartbeatMs: opts.heartbeatMs ?? 30_000, signal: opts.signal,
+  };
   const projectFile = opts.projectFile ?? DEFAULT_PROJECT;
   const project = validateProject(JSON.parse(fs.readFileSync(projectFile, "utf8")));
   const stories = loadStories(projectFile);
@@ -169,7 +207,7 @@ export async function runSim(opts: SimOptions) {
     o.log(`Demo data reset (as ${pm.name}).`);
   }
 
-  o.log(`Simulating ${cast.map(id => person.get(id)!.name).join(", ")} against ${o.baseUrl}/mcp`);
+  o.log(`Simulating ${cast.map(id => person.get(id)!.name).join(", ")} against ${o.baseUrl}/mcp${o.loop ? " (--loop: agents stay online; Ctrl+C to stop)" : ""}`);
   const results = await Promise.all(cast.map((id, i) => runAgent(o, person.get(id)!, owned.get(id)!, stories, i * 1500)));
   const submitted = results.reduce((a, b) => a + b, 0);
   o.log(`Done: ${submitted} task(s) submitted for review. Approve them in the UI as a senior or the PM.`);
