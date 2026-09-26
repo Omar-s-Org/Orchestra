@@ -5,6 +5,7 @@ Project management where every team member works through their own AI agent. Age
 ## Docs (source of truth)
 - [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md): the plan for everyone: model, permissions, backend, MCP tools, split of work
 - [`docs/LOVABLE_PLAN.md`](docs/LOVABLE_PLAN.md): frontend spec + **API contract** (the backend must match it exactly)
+- [`docs/PROJECT_FORMAT.md`](docs/PROJECT_FORMAT.md): define a project (people, milestones, tasks with due dates, history) as JSON
 - [`docs/Orchestra_Tracker.xlsx`](docs/Orchestra_Tracker.xlsx): who does what, and status
 
 ## Run
@@ -24,7 +25,7 @@ Password for all: `demo1234`. Agent key (for MCP): `ak_<id>`.
 | john@ · priya@ · omar@ · hassan@northwind.test | Junior | Engineering |
 | mia@northwind.test | Junior | Marketing |
 
-`npm run seed -w server` (or `POST /api/demo/reset`) restores the demo data.
+`npm run seed` (or "Reset demo" / `POST /api/demo/reset`) reloads the current project. `npm run load -- my-project.json` loads another one (format: `docs/PROJECT_FORMAT.md`).
 
 ## Connect an agent (MCP)
 ```bash
@@ -51,6 +52,7 @@ Open source (MIT). The PM can register webhooks (`POST /api/webhooks {url, event
 ## Layout
 ```
 server/src   Express API, MCP server, permission engine, SQLite (better-sqlite3)
+server/projects  project files (JSON); northwind.json is the demo
 server/test  vitest
 docs/        plans + tracker
 ```

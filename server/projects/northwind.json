@@ -1,0 +1,565 @@
+{
+  "project": {
+    "id": "P-1",
+    "name": "Northwind Launch",
+    "description": "Launch of Northwind's new smart-home product line, delivered by a team where everyone works through their own AI agent."
+  },
+  "people": [
+    {
+      "id": "layla",
+      "name": "Layla Haddad",
+      "role": "pm",
+      "department": "Management",
+      "title": "Project Manager",
+      "email": "layla@northwind.test"
+    },
+    {
+      "id": "sara",
+      "name": "Sara Weber",
+      "role": "senior",
+      "department": "Engineering",
+      "title": "Engineering Lead",
+      "email": "sara@northwind.test"
+    },
+    {
+      "id": "tom",
+      "name": "Tom Berger",
+      "role": "senior",
+      "department": "Marketing",
+      "title": "Marketing Lead",
+      "email": "tom@northwind.test"
+    },
+    {
+      "id": "john",
+      "name": "John Carter",
+      "role": "junior",
+      "department": "Engineering",
+      "title": "Backend Developer",
+      "email": "john@northwind.test"
+    },
+    {
+      "id": "priya",
+      "name": "Priya Nair",
+      "role": "junior",
+      "department": "Engineering",
+      "title": "Backend Developer",
+      "email": "priya@northwind.test"
+    },
+    {
+      "id": "omar",
+      "name": "Omar",
+      "role": "junior",
+      "department": "Engineering",
+      "title": "Frontend Developer",
+      "email": "omar@northwind.test"
+    },
+    {
+      "id": "hassan",
+      "name": "Hassan",
+      "role": "junior",
+      "department": "Engineering",
+      "title": "QA / DevOps",
+      "email": "hassan@northwind.test"
+    },
+    {
+      "id": "mia",
+      "name": "Mia Hofer",
+      "role": "junior",
+      "department": "Marketing",
+      "title": "Content Marketer",
+      "email": "mia@northwind.test"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M-1",
+      "name": "MVP ready",
+      "due": "2026-10-03"
+    },
+    {
+      "id": "M-2",
+      "name": "Beta with 10 customers",
+      "due": "2026-10-17"
+    },
+    {
+      "id": "M-3",
+      "name": "Public launch",
+      "due": "2026-10-31"
+    }
+  ],
+  "docs": [
+    {
+      "id": "K-1",
+      "title": "Northwind Launch brief",
+      "body": "# Northwind Launch\n\nGoal: ship the smart-home hub MVP by **3 Oct**, onboard 10 beta customers by 17 Oct, public launch 31 Oct.\n\n- Every task is owned by a person working through their AI agent.\n- Agents report progress and cost; seniors approve finished work.",
+      "min_role": "junior",
+      "author": "layla"
+    },
+    {
+      "id": "K-2",
+      "title": "API design conventions",
+      "body": "# API conventions\n\n- REST, JSON, kebab-case paths\n- Errors: `{ error }` with proper status codes\n- Every endpoint has a test",
+      "min_role": "junior",
+      "author": "sara"
+    },
+    {
+      "id": "K-3",
+      "title": "Brand voice guide",
+      "body": "# Brand voice\n\nWarm, confident, no jargon. Lead with the benefit, then the feature.",
+      "min_role": "junior",
+      "author": "tom"
+    },
+    {
+      "id": "K-4",
+      "title": "Architecture decision records",
+      "body": "# ADRs\n\n1. SQLite for the pilot, Postgres at launch.\n2. Recommendations run as a nightly batch job.",
+      "min_role": "senior",
+      "author": "sara"
+    },
+    {
+      "id": "K-5",
+      "title": "Launch budget FY27",
+      "body": "# Budget (confidential)\n\n- Engineering: €180k\n- Marketing: €120k\n- AI usage cap: €4k/month",
+      "min_role": "pm",
+      "author": "layla"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-1",
+      "title": "Define MVP scope & success metrics",
+      "milestone": "M-1",
+      "due": "2026-09-20",
+      "status": "done",
+      "departments": [
+        "Management"
+      ],
+      "workers": [
+        "layla"
+      ],
+      "docs": [
+        "K-1"
+      ],
+      "description": "Agree what is in the MVP and how we measure success."
+    },
+    {
+      "id": "T-2",
+      "title": "Architecture review",
+      "milestone": "M-1",
+      "due": "2026-09-30",
+      "status": "in_progress",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "sara"
+      ],
+      "docs": [
+        "K-4"
+      ],
+      "description": "Review the system design before the beta. Senior-only task."
+    },
+    {
+      "id": "T-3",
+      "title": "Set up data pipeline for product catalog",
+      "milestone": "M-1",
+      "due": "2026-09-22",
+      "status": "done",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "john"
+      ],
+      "docs": [
+        "K-2"
+      ],
+      "description": "Import the product catalog nightly into the API database.",
+      "scope": "In: import + validation. Out: pricing logic."
+    },
+    {
+      "id": "T-4",
+      "title": "Build product API",
+      "milestone": "M-1",
+      "due": "2026-10-01",
+      "status": "in_progress",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "priya"
+      ],
+      "depends_on": [
+        "T-3"
+      ],
+      "docs": [
+        "K-2"
+      ],
+      "description": "REST API for products, search and auth, used by the onboarding UI."
+    },
+    {
+      "id": "T-10",
+      "title": "Auth endpoints",
+      "milestone": "M-1",
+      "due": "2026-09-25",
+      "status": "done",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "priya"
+      ],
+      "parent": "T-4"
+    },
+    {
+      "id": "T-11",
+      "title": "Search endpoint",
+      "milestone": "M-1",
+      "due": "2026-09-29",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "priya"
+      ],
+      "parent": "T-4"
+    },
+    {
+      "id": "T-5",
+      "title": "Recommendation model v1",
+      "milestone": "M-1",
+      "due": "2026-10-02",
+      "status": "in_progress",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "john"
+      ],
+      "depends_on": [
+        "T-3"
+      ],
+      "description": "First recommendation model. Serve results through the product API (T-4)."
+    },
+    {
+      "id": "T-6",
+      "title": "Onboarding UI",
+      "milestone": "M-1",
+      "due": "2026-10-02",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "omar"
+      ],
+      "depends_on": [
+        "T-4"
+      ],
+      "description": "Sign-up and device pairing screens."
+    },
+    {
+      "id": "T-7",
+      "title": "Integration tests & CI",
+      "milestone": "M-1",
+      "due": "2026-09-24",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "hassan"
+      ],
+      "depends_on": [
+        "T-4"
+      ],
+      "description": "End-to-end tests for the product API and a CI pipeline."
+    },
+    {
+      "id": "T-8",
+      "title": "Beta landing page copy",
+      "milestone": "M-2",
+      "due": "2026-10-05",
+      "status": "review",
+      "departments": [
+        "Marketing"
+      ],
+      "workers": [
+        "mia"
+      ],
+      "docs": [
+        "K-3"
+      ],
+      "description": "Landing page for beta sign-ups, in the brand voice."
+    },
+    {
+      "id": "T-9",
+      "title": "Beta customer onboarding kit",
+      "milestone": "M-2",
+      "due": "2026-10-12",
+      "status": "todo",
+      "departments": [
+        "Marketing",
+        "Engineering"
+      ],
+      "workers": [
+        "mia",
+        "john"
+      ],
+      "access": [
+        "tom"
+      ],
+      "depends_on": [
+        "T-5"
+      ],
+      "description": "Guide + email sequence for beta customers, including how recommendations work."
+    },
+    {
+      "id": "T-12",
+      "title": "Pricing research",
+      "milestone": "M-2",
+      "due": "2026-10-08",
+      "status": "in_progress",
+      "departments": [
+        "Marketing"
+      ],
+      "workers": [
+        "tom"
+      ],
+      "access": [
+        "layla"
+      ],
+      "description": "Competitor pricing and willingness-to-pay. Senior-only task."
+    },
+    {
+      "id": "T-13",
+      "title": "Launch announcement & press kit",
+      "milestone": "M-3",
+      "due": "2026-10-28",
+      "status": "todo",
+      "departments": [
+        "Marketing"
+      ],
+      "workers": [
+        "mia"
+      ],
+      "depends_on": [
+        "T-8",
+        "T-9"
+      ]
+    },
+    {
+      "id": "T-14",
+      "title": "Load testing",
+      "milestone": "M-3",
+      "due": "2026-10-24",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "hassan"
+      ],
+      "depends_on": [
+        "T-7"
+      ]
+    }
+  ],
+  "history": [
+    {
+      "task": "T-1",
+      "user": "layla",
+      "kind": "completion",
+      "summary": "Drafted MVP scope with a **research agent** (competitor features) and a **writer agent** (scope doc). Success metrics: 10 beta customers, <2 s search.",
+      "agents_used": [
+        "research agent",
+        "writer agent"
+      ],
+      "cost_usd": 0.84,
+      "minutes_ago": 2900,
+      "status_from": "in_progress",
+      "status_to": "review"
+    },
+    {
+      "task": "T-1",
+      "user": "layla",
+      "kind": "approval",
+      "summary": "Approved.",
+      "agents_used": [],
+      "cost_usd": 0,
+      "minutes_ago": 2880,
+      "via": "ui",
+      "status_from": "review",
+      "status_to": "done"
+    },
+    {
+      "task": "T-3",
+      "user": "john",
+      "kind": "progress",
+      "summary": "Generated the import script with a **coding agent**; a **test agent** wrote 14 validation tests.",
+      "agents_used": [
+        "coding agent",
+        "test agent"
+      ],
+      "cost_usd": 1.12,
+      "minutes_ago": 1500
+    },
+    {
+      "task": "T-3",
+      "user": "john",
+      "kind": "completion",
+      "summary": "Pipeline runs nightly; 12,480 products imported, 0 validation errors. Used 2 agents (coding, test). Ready for T-4 and T-5.",
+      "agents_used": [
+        "coding agent",
+        "test agent"
+      ],
+      "cost_usd": 0.63,
+      "minutes_ago": 1300,
+      "status_from": "in_progress",
+      "status_to": "review"
+    },
+    {
+      "task": "T-3",
+      "user": "sara",
+      "kind": "approval",
+      "summary": "Looks good. Approved.",
+      "agents_used": [],
+      "cost_usd": 0,
+      "minutes_ago": 1250,
+      "via": "ui",
+      "status_from": "review",
+      "status_to": "done"
+    },
+    {
+      "task": "T-10",
+      "user": "priya",
+      "kind": "completion",
+      "summary": "JWT auth endpoints with refresh tokens; 9 tests green.",
+      "agents_used": [
+        "coding agent"
+      ],
+      "cost_usd": 0.41,
+      "minutes_ago": 900,
+      "status_from": "in_progress",
+      "status_to": "review"
+    },
+    {
+      "task": "T-10",
+      "user": "sara",
+      "kind": "approval",
+      "summary": "Approved.",
+      "agents_used": [],
+      "cost_usd": 0,
+      "minutes_ago": 880,
+      "via": "ui",
+      "status_from": "review",
+      "status_to": "done"
+    },
+    {
+      "task": "T-4",
+      "user": "priya",
+      "kind": "progress",
+      "summary": "Product endpoints done (`GET /products`, `GET /products/:id`). Search (T-11) next; T-5 will consume the recommendations endpoint.",
+      "agents_used": [
+        "coding agent",
+        "review agent"
+      ],
+      "cost_usd": 0.95,
+      "minutes_ago": 240
+    },
+    {
+      "task": "T-5",
+      "user": "john",
+      "kind": "progress",
+      "summary": "Trained a baseline collaborative-filtering model with a **data agent**; offline precision@10 = 0.31. Will expose it through T-4.",
+      "agents_used": [
+        "data agent",
+        "coding agent"
+      ],
+      "cost_usd": 2.35,
+      "minutes_ago": 120
+    },
+    {
+      "task": "T-2",
+      "user": "sara",
+      "kind": "progress",
+      "summary": "Reviewed service boundaries against the ADRs; flagged the recommendation batch job as the main scaling risk.",
+      "agents_used": [
+        "review agent"
+      ],
+      "cost_usd": 0.52,
+      "minutes_ago": 200
+    },
+    {
+      "task": "T-12",
+      "user": "tom",
+      "kind": "progress",
+      "summary": "Collected pricing for 6 competitors with a **web research agent**.",
+      "agents_used": [
+        "web research agent"
+      ],
+      "cost_usd": 0.77,
+      "minutes_ago": 300
+    },
+    {
+      "task": "T-8",
+      "user": "mia",
+      "kind": "progress",
+      "summary": "Wrote 2 headline variants with a **copywriting agent**, ran a quick A/B on the waitlist page.",
+      "agents_used": [
+        "copywriting agent"
+      ],
+      "cost_usd": 0.38,
+      "minutes_ago": 180
+    },
+    {
+      "task": "T-8",
+      "user": "mia",
+      "kind": "completion",
+      "summary": "Final copy ready. Variant **B** won the A/B test (4.2% vs 3.1% sign-up).\n\n![A/B test results](/api/artifacts/a1b2c3d4e5f60718)\n\nUsed a **copywriting agent** for drafts and an **analytics agent** for the test readout.",
+      "agents_used": [
+        "copywriting agent",
+        "analytics agent"
+      ],
+      "cost_usd": 0.56,
+      "minutes_ago": 55,
+      "status_from": "in_progress",
+      "status_to": "review",
+      "links": [
+        {
+          "label": "Landing page draft",
+          "url": "https://example.com/northwind-beta"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "a1b2c3d4e5f60718",
+      "task": "T-8",
+      "user": "mia",
+      "name": "ab-test-results.svg",
+      "mime": "image/svg+xml",
+      "text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"480\" height=\"260\" viewBox=\"0 0 480 260\"><rect width=\"480\" height=\"260\" fill=\"#0f172a\"/><text x=\"24\" y=\"36\" fill=\"#e2e8f0\" font-family=\"Inter,Arial\" font-size=\"18\">Landing page A/B: sign-up rate</text><rect x=\"60\" y=\"90\" width=\"120\" height=\"130\" fill=\"#64748b\"/><rect x=\"260\" y=\"60\" width=\"120\" height=\"160\" fill=\"#22c55e\"/><text x=\"92\" y=\"240\" fill=\"#cbd5e1\" font-family=\"Arial\" font-size=\"14\">Variant A 3.1%</text><text x=\"286\" y=\"240\" fill=\"#cbd5e1\" font-family=\"Arial\" font-size=\"14\">Variant B 4.2%</text></svg>",
+      "minutes_ago": 60
+    }
+  ],
+  "live_agents": [
+    {
+      "user": "john",
+      "task": "T-5",
+      "activity": "Tuning recommendation model hyper-parameters"
+    },
+    {
+      "user": "priya",
+      "task": "T-4",
+      "activity": "Implementing search endpoint (T-11)"
+    },
+    {
+      "user": "tom",
+      "task": "T-12",
+      "activity": "Comparing competitor price tiers"
+    }
+  ]
+}

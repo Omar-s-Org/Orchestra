@@ -41,7 +41,7 @@ export const createUserRow = (db: DB, u: { id: string; name: string; email: stri
     .run(u.id, u.name, u.email, hashPassword(u.password), u.title, u.department, u.role, u.agentKey ?? newToken("ak"));
 
 // ---------- helpers ----------
-type TaskRow = { id: string; project_id: string; milestone_id: string; parent_id: string | null; title: string; description: string; scope: string; status: Status; created_at: string; updated_at: string };
+type TaskRow = { id: string; project_id: string; milestone_id: string; parent_id: string | null; title: string; description: string; scope: string; status: Status; due: string | null; created_at: string; updated_at: string };
 type UpdateRow = { id: number; task_id: string; user_id: string; via: Via; agent_name: string | null; kind: string; status_from: Status | null; status_to: Status | null; summary: string; agents_used: string; cost_usd: number; links: string; created_at: string };
 
 function userRefs(db: DB) {
@@ -83,6 +83,8 @@ function makeSummary(c: Ctx, ix: Index, t: TaskRow, ref = userRefs(c.db)) {
     departments: ix.departments.get(t.id) ?? [],
     workers: (ix.workers.get(t.id) ?? []).map(ref),
     access: (ix.access.get(t.id) ?? []).map(ref),
+    due: t.due,
+    overdue: isOverdue(t.due, t.status),
     live: liveFor(c.db, t.id),
     cost_usd: round(cost),
     updated_at: t.updated_at,
@@ -90,6 +92,8 @@ function makeSummary(c: Ctx, ix: Index, t: TaskRow, ref = userRefs(c.db)) {
   };
 }
 const round = (n: number) => Math.round(n * 100) / 100;
+/** A task is overdue once its due date (end of that day, UTC) has passed and it isn't done. */
+export const isOverdue = (due: string | null, status: Status) => !!due && status !== "done" && Date.parse(`${due.slice(0, 10)}T23:59:59Z`) < Date.now();
 
 function presentUpdate(db: DB, u: UpdateRow, ref = userRefs(db)) {
   const t = db.prepare("SELECT id, title FROM tasks WHERE id=?").get(u.task_id) as { id: string; title: string };
@@ -216,7 +220,8 @@ export function overview(c: Ctx) {
       by_person: [...byPerson].map(([uid, v]) => ({ user: ref(uid), cost_usd: round(v), tasks_done: doneBy(uid) })).sort((a, b) => b.cost_usd - a.cost_usd),
     };
   }
-  return { milestones, by_status, review_queue, cost };
+  const overdue = tasks.filter(t => isOverdue(t.due, t.status)).length;
+  return { milestones, by_status, overdue, review_queue, cost };
 }
 
 export function listKb(c: Ctx, q?: string) {
@@ -261,7 +266,7 @@ export function graph(c: Ctx) {
   }
   const people = new Set<string>();
   for (const t of tasks) {
-    nodes.push({ id: `task:${t.id}`, type: "task", label: `${t.id} ${t.title}`, status: t.status, department: (ix.departments.get(t.id) ?? [])[0] ?? null, live: !!liveFor(c.db, t.id), parent_id: t.parent_id ? `task:${t.parent_id}` : null });
+    nodes.push({ id: `task:${t.id}`, type: "task", label: `${t.id} ${t.title}`, status: t.status, due: t.due, overdue: isOverdue(t.due, t.status), department: (ix.departments.get(t.id) ?? [])[0] ?? null, live: !!liveFor(c.db, t.id), parent_id: t.parent_id ? `task:${t.parent_id}` : null });
     edges.push(t.parent_id ? { source: `task:${t.parent_id}`, target: `task:${t.id}`, type: "subtask" } : { source: `milestone:${t.milestone_id}`, target: `task:${t.id}`, type: "contains" });
     for (const w of ix.workers.get(t.id) ?? []) { people.add(w); edges.push({ source: `person:${w}`, target: `task:${t.id}`, type: "works_on" }); }
   }
@@ -424,15 +429,15 @@ export function createMilestone(c: Ctx, m: { name: string; due?: string }) {
 }
 
 export type NewTask = { milestoneId: string; parentId?: string; title: string; description?: string; scope?: string;
-  departments?: string[]; workers?: string[]; access?: string[]; dependsOn?: string[]; docIds?: string[]; id?: string; status?: Status };
+  departments?: string[]; workers?: string[]; access?: string[]; dependsOn?: string[]; docIds?: string[]; id?: string; status?: Status; due?: string };
 
 /** Insert a fully specified task row (used by the PM endpoint and the seed). */
 export function insertTask(db: DB, t: NewTask, createdBy: string) {
   const id = t.id ?? `T-${((db.prepare("SELECT MAX(CAST(SUBSTR(id,3) AS INTEGER)) AS n FROM tasks").get() as { n: number | null }).n ?? 0) + 1}`;
   const p = db.prepare("SELECT id FROM projects LIMIT 1").get() as { id: string };
   const ts = now();
-  db.prepare("INSERT INTO tasks (id,project_id,milestone_id,parent_id,title,description,scope,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
-    .run(id, p.id, t.milestoneId, t.parentId ?? null, t.title, t.description ?? "", t.scope ?? "", t.status ?? "todo", createdBy, ts, ts);
+  db.prepare("INSERT INTO tasks (id,project_id,milestone_id,parent_id,title,description,scope,status,due,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(id, p.id, t.milestoneId, t.parentId ?? null, t.title, t.description ?? "", t.scope ?? "", t.status ?? "todo", t.due ?? null, createdBy, ts, ts);
   for (const d of t.departments ?? []) db.prepare("INSERT INTO task_departments VALUES (?,?)").run(id, d);
   for (const u of t.workers ?? []) db.prepare("INSERT INTO task_people VALUES (?,?,'worker')").run(id, u);
   for (const u of t.access ?? []) db.prepare("INSERT INTO task_people VALUES (?,?,'access')").run(id, u);
