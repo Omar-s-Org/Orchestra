@@ -91,9 +91,17 @@ export function createApp(db: DB) {
   // Wipes all data, so it needs the PM (the URL may be public when hosted).
   r.post("/demo/reset", h(c => {
     if (c.user.role !== "pm") throw new Forbidden("Only the PM can reset the demo");
+    stopDemo(db); // a running demo's agents would otherwise keep working on the freshly reset data
     reset(db);
     return { ok: true };
   }));
   app.use("/api", r);
+  // JSON errors everywhere (the UI and agents parse them), including unknown routes and malformed JSON bodies.
+  app.use("/api", (_req: Request, res: Response) => void res.status(404).json({ error: "Not found" }));
+  app.use((err: Error & { status?: number }, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status ?? 500;
+    if (status === 500) console.error(err);
+    res.status(status).json({ error: status === 500 ? "Internal server error" : err.message });
+  });
   return app;
 }

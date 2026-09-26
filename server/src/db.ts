@@ -48,6 +48,13 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor_id TEXT NOT NULL, via TEXT NOT NULL,
   action TEXT NOT NULL, entity_id TEXT, allowed INTEGER NOT NULL, detail TEXT);
+-- Lookups by task/person that every poll does; without them per-task reads scan whole tables.
+CREATE INDEX IF NOT EXISTS ix_updates_task ON task_updates (task_id, kind);
+CREATE INDEX IF NOT EXISTS ix_people_user ON task_people (user_id);
+CREATE INDEX IF NOT EXISTS ix_links_to ON task_links (to_task, type);
+CREATE INDEX IF NOT EXISTS ix_artifacts_task ON artifacts (task_id);
+CREATE INDEX IF NOT EXISTS ix_tasks_parent ON tasks (parent_id);
+CREATE INDEX IF NOT EXISTS ix_sessions_user ON auth_sessions (user_id);
 `;
 
 export const TABLES = ["meta", "audit", "webhooks", "agent_sessions", "artifacts", "task_updates", "task_docs", "kb_docs", "task_links",

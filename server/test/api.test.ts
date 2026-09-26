@@ -109,6 +109,16 @@ describe("REST + MCP end to end", () => {
     expect(await r.json()).toEqual({ ok: true });
   });
 
+  it("errors are JSON: unknown routes and malformed bodies", async () => {
+    const pm = await login("layla@northwind.test");
+    const nf = await get(pm, "/api/nope");
+    expect(nf.status).toBe(404);
+    expect(await nf.json()).toEqual({ error: "Not found" });
+    const bad = await fetch(`${base}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{not json" });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toBeTruthy();
+  });
+
   it("MCP rejects an unknown agent key", async () => {
     await expect(agent("nope", "x")).rejects.toThrow();
   });
