@@ -13,13 +13,14 @@ The app is **read-mostly**. Agents do the work and the UI shows it. The only hum
 
 ## 2. Hard constraints
 1. **Frontend only.** Do NOT enable Lovable Cloud, Supabase, any database or any auth provider. Our Express API is the only backend.
-2. **API base URL:** read from `localStorage.apiBase`, default `http://localhost:8787`. Settings popover in the user menu to change it.
+2. **API base URL:** read from `localStorage.apiBase`, default **the hosted backend** `https://<orchestra-api>.up.railway.app` (the exact URL goes in `src/lib/config.ts`; the team will send it). `http://localhost:8787` is only for local development. Settings popover in the user menu to change it.
 3. **All API calls go through one file, `src/lib/api.ts`,** using plain `fetch`. After login, send `Authorization: Bearer <token>` on every request. Store the token in `localStorage.token`. On any 401, clear the token and go to the login page.
 4. **Never compute permissions in the UI.** The server already filters everything. Show action buttons **only** when the task's `allowed_actions` includes them, and show nav items **only** from `me.capabilities`.
 5. **Live updates by polling:** the current page's data every **2 s**, the graph every **5 s**. Keep previous data on screen while refetching (no flicker, no spinners after the first load).
 6. **Mock mode:** `api.ts` can serve every endpoint from `src/lib/mock.ts`, using the exact shapes in section 4. See **section 10** for when it switches on. The mock data must be rich and consistent (Northwind project, section 7) and change slightly on each poll (a live agent's activity text, a new activity item), so the live UI can be demoed without the backend. Mock must implement the same query filters as the real API.
 7. Errors come back as `{ "error": "message" }` with status 400/401/403/404. Show them in a toast; show 403 messages in amber (they explain permission refusals).
-8. Libraries: React + TypeScript + Tailwind + shadcn/ui (Lovable default), `react-force-graph-2d` for the graph, `react-markdown` + `remark-gfm` for explanations, `lucide-react` for icons, TanStack Query for data and polling, React Router for routes, `sonner` (shadcn) for toasts, `date-fns` for times. Routing, state and UI defaults are fixed in **section 10**; don't improvise them.
+8. Libraries: React + TypeScript + Tailwind + shadcn/ui (Lovable default), `react-force-graph-2d` for the graph, `react-markdown` + `remark-gfm` for explanations, `lucide-react` for icons, TanStack Query for data and polling, **TanStack Router** (the stack's router) for routes, `sonner` (shadcn) for toasts, `date-fns` for times. Routing, state and UI defaults are fixed in **section 10**; don't improvise them.
+9. **Browser-only authenticated data (critical).** The session token lives in `localStorage`, which only exists in the browser. So every authenticated API call runs **in the browser**: TanStack Query hooks inside components. Never make these calls in a route `loader`, a server function (`createServerFn`), or during server-side rendering. If the stack renders on the server, show a skeleton until the component is mounted. All `localStorage` access goes through one helper guarded by `typeof window !== "undefined"`.
 
 ## 3. Roles and navigation (one app, not one app per role)
 There is **one** layout for everyone. What changes per role comes only from the API:
@@ -110,7 +111,7 @@ type TaskDetail = TaskSummary & {
 | GET | `/api/graph` | none | see section 6 (PM only; others get 403) |
 | GET | `/api/kb` | `?q=` | `{ id, title, excerpt, min_role: Role, author: UserRef, created_at }[]` |
 | GET | `/api/kb/:id` | none | `{ id, title, body /* markdown */, min_role, author, created_at, linked_tasks: {id,title}[] }` |
-| POST | `/api/demo/reset` | none | `{ ok: true }` (demo button in the settings popover) |
+| POST | `/api/demo/reset` | none | `{ ok: true }`. **PM only** (403 otherwise). Show the "Reset demo" button only when `me.user.role === "pm"` |
 
 `GET /api/overview`:
 ```ts
@@ -269,10 +270,12 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 - [ ] In auto mode, stopping the backend switches to MOCK (with a toast) within about 10 s, and restarting it switches back to LIVE.
 - [ ] Board/Activity filters and the open task drawer survive a page refresh (URL query params).
 - [ ] A 401 logs out once and returns to the same page after logging in again.
+- [ ] A hard refresh of `/board?task=T-4` (logged in, LIVE) reopens the drawer with live data, and the browser's network tab shows the request going to the hosted API.
+- [ ] Only the PM sees "Reset demo".
 
 ## 10. App architecture and UI defaults (fixed decisions; don't guess)
 
-### Routes (React Router)
+### Routes (TanStack Router)
 | Path | Page | Guard |
 |---|---|---|
 | `/login` | Login | public; if already logged in, go to landing |
@@ -283,6 +286,9 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 | `/review` | Review | auth + `capabilities.review`, else redirect `/board` |
 | `/` | redirect to landing (section 3) | auth |
 
+- Implementation with TanStack Router:
+  - Declare each route's query params with `validateSearch` (zod): Board `{ department?, person?, mine?, task? }`, Activity `{ via?, kind?, task? }`, Knowledge/Graph/Review `{ task? }`, Login `{ next? }`.
+  - Do guards in `beforeLoad` only when running in the browser (`typeof window !== "undefined"`), or in the authenticated layout component. Redirect with `redirect({ to: "/login", search: { next: location.href } })`.
 - **Task drawer** = the query param `?task=T-12` on any page. It is deep-linkable, and closing it removes the param.
 - **Filters** live in query params too (e.g. `/board?department=Engineering&person=john`), so a refresh keeps them.
 - **Auth guard:** with no token, redirect to `/login?next=<current path>`, and return there after login.
