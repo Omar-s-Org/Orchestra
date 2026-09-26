@@ -1,0 +1,19 @@
+{
+  "project": { "id": "P-T", "name": "Agent Test Lab", "description": "Tiny project to test real agents over MCP." },
+  "people": [
+    { "id": "boss", "name": "Boss Test", "role": "pm", "department": "Management" },
+    { "id": "lead", "name": "Lead Test", "role": "senior", "department": "Engineering" },
+    { "id": "hassan", "name": "Hassan", "role": "junior", "department": "Engineering" },
+    { "id": "buddy", "name": "Buddy Test", "role": "junior", "department": "Engineering" }
+  ],
+  "milestones": [{ "id": "M-1", "name": "Agent test", "due": "2026-10-01" }],
+  "docs": [
+    { "id": "K-1", "title": "How to write the report", "body": "Explain what you did, which sub-agents you used, and roughly what it cost.", "author": "lead" },
+    { "id": "K-2", "title": "Secret budget", "body": "PM only.", "min_role": "pm", "author": "boss" }
+  ],
+  "tasks": [
+    { "id": "T-1", "title": "Write a haiku about the project", "milestone": "M-1", "due": "2026-09-30", "departments": ["Engineering"], "workers": ["hassan"], "docs": ["K-1"], "description": "Write a 3-line haiku about Orchestra and attach it as a text file." },
+    { "id": "T-2", "title": "Draw an SVG logo", "milestone": "M-1", "due": "2026-09-30", "departments": ["Engineering"], "workers": ["hassan"], "depends_on": ["T-1"], "description": "Create a simple SVG logo and attach it. Locked until T-1 is approved." },
+    { "id": "T-3", "title": "Buddy's task", "milestone": "M-1", "due": "2026-09-30", "departments": ["Engineering"], "workers": ["buddy"], "description": "Not yours: your agent must not be able to change this." }
+  ]
+}
