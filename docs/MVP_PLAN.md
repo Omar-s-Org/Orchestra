@@ -100,7 +100,7 @@ audit(... unchanged, keeps allowed=0 refusals)
 `whoami`, `list_my_tasks`, `get_task`, `start_task(task_id, plan)`, `report_progress(task_id, summary, agents_used[], cost_usd, links[])`, `attach_artifact(task_id, name, mime, base64) → {id, url}`, `submit_task(task_id, explanation, agents_used[], cost_usd, links[])`, `search_kb(query)`, `read_kb(doc_id)`, `team_board()` (what the caller may see). Optional header `X-Agent-Name` labels the agent in the live view. Every call updates `agent_sessions.last_seen`.
 
 ## Seed (`server/src/seed.ts`)
-Tasks include `depends_on` chains and cross-mentions so the graph shows real structure on first load. Project "Northwind Launch" (fictional). PM: Layla. Seniors: Sara (Engineering), Tom (Marketing). Juniors: John, Priya (Eng); Omar, Hassan (Eng, real Claude Code); Mia (Marketing). 3 milestones, ~10 tasks spread across depts incl. one senior task hidden from juniors, 5 KB docs incl. PM-only budget. Tokens `tok_<id>`.
+Tasks include `depends_on` chains and cross-mentions so the graph shows real structure on first load. Project "Northwind Launch" (fictional). PM: Layla. Seniors: Sara (Engineering), Tom (Marketing). Juniors: John, Priya (Eng); Omar, Hassan (Eng, real Claude Code); Mia (Marketing). 3 milestones, ~10 tasks spread across depts incl. one senior task hidden from juniors, 5 KB docs incl. PM-only budget. Password `demo1234`; agent keys `ak_<id>`.
 
 ## Simulated agents (`server/sim/run.ts`, `npm run sim`)
 Uses `@modelcontextprotocol/sdk` client against `/mcp` with John/Priya/Mia tokens + `X-Agent-Name`. Loop per persona: pick todo task → `start_task` → 2–3 `report_progress` (explanation, agents used, cost) with 3–6 s delays → `attach_artifact` (generated SVG chart) → `submit_task`. One persona attempts a forbidden action (read PM-only doc / approve own task) to show refusal.
@@ -124,7 +124,7 @@ Once this plan is approved, write `docs/LOVABLE_PLAN.md`: in-scope only, copy-pa
 
 ## Verification
 1. `npm test` green; `npx tsc --noEmit -p server`.
-2. `npm run dev`, then `npm run sim` → `curl -H "Authorization: Bearer tok_layla" :8787/api/agents/live` shows active agents; `/api/activity` fills with explanations incl. cost + artifact links; artifact URL returns image.
-3. `claude mcp add --transport http orchestra http://localhost:8787/mcp --header "Authorization: Bearer tok_omar"` → "work on your task" → updates appear in `/api/activity` via=agent.
-4. As `tok_john`: `/api/tasks` excludes the senior task; approve returns 403 and is logged.
+2. `npm run dev`, then `npm run sim` → `/api/agents/live` (as Layla) shows active agents; `/api/activity` fills with explanations incl. cost + artifact links; artifact URL returns image.
+3. `claude mcp add --transport http orchestra http://localhost:8787/mcp --header "Authorization: Bearer ak_omar"` → "work on your task" → updates appear in `/api/activity` via=agent.
+4. As John: `/api/tasks` excludes the senior task; approve returns 403 and is logged.
 5. Push to `claude/brave-archimedes-lbi3ef`; open PR via compare link if MCP PR creation still fails.

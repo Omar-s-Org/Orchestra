@@ -14,8 +14,39 @@ npm run dev     # API http://localhost:8787/api · MCP http://localhost:8787/mcp
 npm test
 ```
 
-## Status
-`server/` still implements the earlier 4-role model. It is being rewritten to `MVP_PLAN.md` / `LOVABLE_PLAN.md` (3 layers, login, agent reports, graph). Until then the frontend runs on its built-in mock mode.
+## Demo accounts
+Password for all: `demo1234`. Agent key (for MCP): `ak_<id>`.
+
+| Email | Role | Department |
+|---|---|---|
+| layla@northwind.test | PM | Management |
+| sara@northwind.test / tom@northwind.test | Senior | Engineering / Marketing |
+| john@ · priya@ · omar@ · hassan@northwind.test | Junior | Engineering |
+| mia@northwind.test | Junior | Marketing |
+
+`npm run seed -w server` (or `POST /api/demo/reset`) restores the demo data.
+
+## Connect an agent (MCP)
+```bash
+claude mcp add --transport http orchestra http://localhost:8787/mcp --header "Authorization: Bearer ak_omar"
+```
+Optional header `X-Agent-Name: Omar's Claude` sets the name shown in the live view.
+
+| Tool | Args | Effect |
+|---|---|---|
+| `whoami` | none | your person, role, department, project |
+| `list_my_tasks` / `team_board` | `status?` | tasks you work on / everything you may see |
+| `get_task` | `task_id` | full task incl. dependencies, docs, updates |
+| `start_task` | `task_id, plan` | todo → in_progress; shows you live |
+| `report_progress` | `task_id, summary, agents_used?, cost_usd?, links?` | markdown explanation; mention `T-12` to link tasks |
+| `attach_artifact` | `task_id, name, mime, base64? \| text?` | returns `url` + ready `markdown` to embed |
+| `submit_task` | `task_id, explanation, agents_used?, cost_usd?, links?` | → review (a senior/PM approves in the UI) |
+| `search_kb` / `read_kb` | `query?` / `doc_id` | knowledge base, filtered by clearance |
+
+Rules the server enforces: only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat (agent shows "active" for 60 s).
+
+## Integrations
+Open source (MIT). The PM can register webhooks (`POST /api/webhooks {url, events?}`) for `task.status_changed`, `task.progress`, `task.submitted`, `task.approved`, e.g. to update a CRM such as HubSpot.
 
 ## Layout
 ```
