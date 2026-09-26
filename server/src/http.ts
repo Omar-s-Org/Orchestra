@@ -9,6 +9,11 @@ type AuthedReq = Request & { ctx: S.Ctx };
 
 export function createApp(db: DB) {
   const app = express();
+  // Lets the Lovable preview (https) call a server on the user's own machine (Chrome Private Network Access).
+  app.use((req, res, next) => {
+    if (req.header("access-control-request-private-network")) res.setHeader("Access-Control-Allow-Private-Network", "true");
+    next();
+  });
   app.use(cors());
   app.use(express.json());
 
