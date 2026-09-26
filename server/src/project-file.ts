@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { type DB, TABLES, now } from "./db.js";
 import { createUserRow, insertTask, extractMentions } from "./service.js";
+import { findCycle } from "./ordering.js";
 
 const id = z.string().min(1);
 const role = z.enum(["pm", "senior", "junior"]);
@@ -68,6 +69,8 @@ export function validateProject(raw: unknown): ProjectFile {
     t.depends_on.forEach(d => ref(tasks.has(d) && d !== t.id, `tasks.${t.id}.depends_on: unknown task "${d}"`));
     t.docs.forEach(d => ref(docs.has(d), `tasks.${t.id}.docs: unknown doc "${d}"`));
   }
+  const cycle = findCycle(new Map(p.tasks.map(t => [t.id, t.depends_on])));
+  if (cycle) problems.push(`tasks: circular prerequisites ${cycle.join(" → ")} (nothing in this loop could ever start)`);
   p.history.forEach((h, i) => { ref(tasks.has(h.task), `history[${i}].task: unknown task "${h.task}"`); ref(people.has(h.user), `history[${i}].user: unknown person "${h.user}"`); });
   p.artifacts.forEach((a, i) => {
     ref(tasks.has(a.task), `artifacts[${i}].task: unknown task "${a.task}"`); ref(people.has(a.user), `artifacts[${i}].user: unknown person "${a.user}"`);

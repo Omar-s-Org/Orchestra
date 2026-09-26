@@ -18,7 +18,7 @@ export type Story = {
   completion: { explanation: string; agents_used?: string[]; cost_usd?: number; links?: Link[] }; // "{{artifact}}" embeds the chart
 };
 type Person = ProjectFile["people"][number];
-type TaskInfo = { id: string; title: string; status: string; parent_id: string | null; description?: string; docs?: { id: string; readable: boolean }[] };
+type TaskInfo = { id: string; title: string; status: string; parent_id: string | null; locked?: boolean; blocked_by?: { id: string; status: string }[]; description?: string; docs?: { id: string; readable: boolean }[] };
 
 export type SimOptions = {
   baseUrl: string;             // e.g. http://localhost:8787 or the Railway URL
@@ -98,10 +98,14 @@ async function runAgent(o: Required<Omit<SimOptions, "projectFile" | "people" | 
     return JSON.parse(text) as T;
   };
 
-  const queue = (await call<TaskInfo[]>("list_my_tasks"))
-    .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"))
+  const open = (await call<TaskInfo[]>("list_my_tasks"))
+    .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"));
+  // Locked tasks wait until their prerequisites are approved; the server would refuse them anyway.
+  for (const t of open.filter(t => t.locked))
+    log(`${t.id} waiting: locked until ${t.blocked_by!.map(b => `${b.id} (${b.status})`).join(", ")} is done`);
+  const queue = open.filter(t => !t.locked)
     .sort(workOrder);
-  if (!queue.length) log("nothing to do (all my tasks are in review or done; reset the demo to run again)");
+  if (!queue.length) log("nothing to do right now (tasks are locked, in review or done; approve prerequisites or reset the demo)");
 
   let done = 0;
   for (const { id } of queue) {

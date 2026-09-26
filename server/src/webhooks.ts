@@ -1,4 +1,4 @@
-// Outbound webhooks: lets any CRM / automation tool (HubSpot, n8n, Zapier…) react to project events.
+// Outbound webhooks: the open plug. Any external tool can subscribe to project events later.
 import type { DB } from "./db.js";
 
 export type Event = "task.status_changed" | "task.progress" | "task.submitted" | "task.approved";

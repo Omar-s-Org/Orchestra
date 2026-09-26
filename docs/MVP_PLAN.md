@@ -56,13 +56,21 @@ One rule on the server decides what each person sees. The UI is the same for eve
 - Frontend: `react-force-graph-2d` (force layout, zoom/pan like Obsidian). Colours by node type and task status. Click a task → task drawer. Filter chips: department, status, edge type.
 - Seniors and juniors get the **Board** (the same data as cards, scoped by the unified rule), not the graph.
 
+## Prerequisites, locking and suggested order
+- Each task can list prerequisites (`depends_on`, set by the PM in the project file).
+- **Locked:** while any prerequisite is not **done** (approved by a senior or the PM), the task is locked. Its workers and their agents can't start, report on or submit it; the server refuses with 409 and the refusal is logged. Review isn't enough: done means approved.
+- **Suggested order (`sequence`):** prerequisites first (topological order), then earlier due date, then task number. It's a hint: any unlocked task may be done in any order.
+- API: every task carries `sequence`, `locked` and `blocked_by`; lists come back in suggested order; MCP `next_task` returns the caller's next unlocked task and what their locked tasks wait on.
+- Demo beat: Omar's T-6 is locked behind T-4. Priya's agent submits T-4, Sara approves it in the UI, and T-6 unlocks live.
+- Project files with circular prerequisites are rejected at load time.
+
 ## Login & agents
 - **Humans** log in with **email + password** (company-issued accounts). `POST /api/auth/login` → session token; passwords stored hashed with scrypt (`node:crypto`). Demo accounts are seeded, password `demo1234`.
 - **Agents** never use the password. Each user gets a personal **agent API key** (`GET /api/me/agent-key`, shown in a "Connect your agent" dialog with the ready-made `claude mcp add …` command). The agent writes to the database through MCP, and the UI simply shows those updates. There is no direct link between the UI and the agent.
 
 ## Open source & integrations (in the pitch + minimal code)
-- Open source (MIT `LICENSE`). Documented REST + MCP means anything can plug in: any MCP-capable agent (Claude Code, others), and business tools such as HubSpot or a CRM.
-- MVP hook: **outbound webhooks**. `webhooks(url, events)` table; on `task.status_changed`, `task.progress`, `task.submitted` and `task.approved` the server POSTs JSON to registered URLs (fire-and-forget, logged). That lets a CRM or Zapier/n8n react to project events, with no connector-specific code. Registration via `POST /api/webhooks` (PM). A demo receiver URL can be shown in the pitch.
+- Open source (MIT `LICENSE`). **An open plug, not specific integrations.** The documented REST API, the MCP server (any MCP-capable agent) and outbound webhooks let anything connect later. **No CRM or HubSpot demo is built for the MVP.**
+- Webhooks: `webhooks(url, events)` table; on `task.status_changed`, `task.progress`, `task.submitted` and `task.approved` the server POSTs JSON to registered URLs (fire-and-forget, logged). Registration via `POST /api/webhooks` (PM).
 
 ## Data model (replace `server/src/db.ts` SCHEMA)
 ```

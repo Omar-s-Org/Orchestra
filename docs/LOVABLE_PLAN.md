@@ -49,6 +49,9 @@ type TaskSummary = {
   access: UserRef[];             // people who can view it
   due: string | null;            // "2026-10-02" (YYYY-MM-DD) or null
   overdue: boolean;              // past due and not done → show a red "Overdue" badge
+  sequence: number | null;       // suggested order (1 = first): prerequisites first, then due date. A hint, not a rule
+  locked: boolean;               // a prerequisite isn't done (approved) yet → can't be started. Show a 🔒 lock
+  blocked_by: { id: string; title: string; status: Status }[];   // the unfinished prerequisites
   live: Live;
   cost_usd: number;              // total reported by agents so far
   updated_at: string;            // ISO
@@ -145,11 +148,12 @@ See section 6.
 ### 5.4 Board (everyone)
 - Header: status count chips (from `by_status`), plus a red **Overdue** chip when `overview.overdue > 0`. If `capabilities.cost` is true, add **cost tiles**: total cost, plus a mini bar list of cost by department (PM) or by person (senior).
 - Filter chips: department, person, "Mine". These are **server-side** filters: pass them as `department`, `person` and `mine` query params, and sync them to the URL (section 10).
-- **Kanban**, 4 columns: To do · In progress · Review · Done. Each card shows the id, title, milestone name, department tags, worker avatars, cost, and the **due date** ("Due 2 Oct"; red with an "Overdue" badge when `overdue`). If `live` is set, add a pulsing border and "🤖 {agent_name}: {activity}". Subtasks appear indented under their parent with a small "↳".
+- **Kanban**, 4 columns: To do · In progress · Review · Done. Each card shows the id, title, milestone name, department tags, worker avatars, cost, and the **due date** ("Due 2 Oct"; red with an "Overdue" badge when `overdue`). **Locked** cards (`locked: true`) are dimmed with a 🔒 and "Waiting on T-4" (from `blocked_by`). Within each column, sort cards by `sequence`. Add a "**Next up**" chip on the first unlocked To-do card of the logged-in user. If `live` is set, add a pulsing border and "🤖 {agent_name}: {activity}". Subtasks appear indented under their parent with a small "↳".
 - Clicking a card opens the **task drawer**.
 
 ### 5.5 Task drawer (everyone; right side sheet, about 560px wide)
-1. Id, title, status pill, milestone, due date (red if overdue), department tags.
+1. Id, title, status pill, milestone, due date (red if overdue), department tags, and "Step {sequence}" in the suggested order.
+   If `locked`: an amber banner "🔒 Locked: waiting on T-4 Build product API (in progress). It unlocks when that task is approved." Each blocker links to its task.
 2. **People:** Workers (avatars and names) and Access (smaller avatars).
 3. **Live banner** when `live` is set: pulsing dot, "{agent_name} is working: {activity}".
 4. Tabs:
@@ -183,6 +187,8 @@ A list of `review_queue` items (`ReviewItem`, section 4; no extra fetches). Each
     status?: Status;            // tasks
     due?: string | null;        // tasks
     overdue?: boolean;          // tasks: draw a red outline
+    locked?: boolean;           // tasks: draw dimmed with a small lock; its depends_on arrows show why
+    sequence?: number | null;   // tasks: suggested order
     department?: string;        // tasks, persons
     role?: Role;                // persons
     live?: boolean;             // task being worked on / person's agent active
@@ -272,6 +278,7 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 - [ ] A 401 logs out once and returns to the same page after logging in again.
 - [ ] A hard refresh of `/board?task=T-4` (logged in, LIVE) reopens the drawer with live data, and the browser's network tab shows the request going to the hosted API.
 - [ ] Only the PM sees "Reset demo".
+- [ ] Locked tasks show 🔒 + "Waiting on …". After a senior approves the blocking task, the lock disappears within 2 s.
 
 ## 10. App architecture and UI defaults (fixed decisions; don't guess)
 

@@ -6,7 +6,7 @@ import { hashPassword, verifyPassword, newToken } from "./auth.js";
 import {
   type User, type Role, type Status, type Index,
   loadIndex, canSeeTask, isWorker, canApprove, allowedActions, canReadDoc, capabilities,
-  Forbidden, NotFound, BadRequest, HttpError, LEVEL,
+  Forbidden, NotFound, BadRequest, HttpError, Locked, LEVEL,
 } from "./permissions.js";
 import { emit } from "./webhooks.js";
 
@@ -56,7 +56,7 @@ function audit(c: Ctx, action: string, entityId: string | null, allowed: boolean
 /** Run a write; refusals are logged too so managers can see blocked agent actions. */
 function guarded<T>(c: Ctx, action: string, id: string | null, fn: () => T): T {
   try { const r = fn(); audit(c, action, id, true); return r; }
-  catch (e) { if (e instanceof Forbidden) audit(c, action, id, false, { reason: e.message }); throw e; }
+  catch (e) { if (e instanceof Forbidden || e instanceof Locked) audit(c, action, id, false, { reason: e.message }); throw e; }
 }
 
 const taskRow = (db: DB, id: string) => db.prepare("SELECT * FROM tasks WHERE id=?").get(id) as TaskRow | undefined;
@@ -85,6 +85,8 @@ function makeSummary(c: Ctx, ix: Index, t: TaskRow, ref = userRefs(c.db)) {
     access: (ix.access.get(t.id) ?? []).map(ref),
     due: t.due,
     overdue: isOverdue(t.due, t.status),
+    sequence: ix.order.sequence.get(t.id) ?? null,
+    ...lockInfo(c.db, ix, t),
     live: liveFor(c.db, t.id),
     cost_usd: round(cost),
     updated_at: t.updated_at,
@@ -92,6 +94,18 @@ function makeSummary(c: Ctx, ix: Index, t: TaskRow, ref = userRefs(c.db)) {
   };
 }
 const round = (n: number) => Math.round(n * 100) / 100;
+
+/** locked = a prerequisite isn't done yet. blocked_by lists those prerequisites (titles only if visible). */
+function lockInfo(db: DB, ix: Index, t: TaskRow) {
+  const open = t.status === "done" ? [] : ix.order.blockedBy(t.id);
+  return {
+    locked: open.length > 0,
+    blocked_by: open.map(id => {
+      const d = taskRow(db, id)!;
+      return { id: d.id, title: d.title, status: d.status };
+    }),
+  };
+}
 /** A task is overdue once its due date (end of that day, UTC) has passed and it isn't done. */
 export const isOverdue = (due: string | null, status: Status) => !!due && status !== "done" && Date.parse(`${due.slice(0, 10)}T23:59:59Z`) < Date.now();
 
@@ -125,7 +139,9 @@ export function listTasks(c: Ctx, f: { status?: string; department?: string; per
   const ix = loadIndex(c.db);
   const ref = userRefs(c.db);
   const people = (id: string) => [...(ix.workers.get(id) ?? []), ...(ix.access.get(id) ?? [])];
-  return (c.db.prepare("SELECT * FROM tasks ORDER BY milestone_id, CAST(SUBSTR(id,3) AS INTEGER)").all() as TaskRow[])
+  const seq = (id: string) => ix.order.sequence.get(id) ?? Infinity;
+  return (c.db.prepare("SELECT * FROM tasks").all() as TaskRow[])
+    .sort((a, b) => seq(a.id) - seq(b.id))
     .filter(t => canSeeTask(ix, c.user, t.id))
     .filter(t => !f.status || t.status === f.status)
     .filter(t => !f.department || (ix.departments.get(t.id) ?? []).includes(f.department))
@@ -266,7 +282,7 @@ export function graph(c: Ctx) {
   }
   const people = new Set<string>();
   for (const t of tasks) {
-    nodes.push({ id: `task:${t.id}`, type: "task", label: `${t.id} ${t.title}`, status: t.status, due: t.due, overdue: isOverdue(t.due, t.status), department: (ix.departments.get(t.id) ?? [])[0] ?? null, live: !!liveFor(c.db, t.id), parent_id: t.parent_id ? `task:${t.parent_id}` : null });
+    nodes.push({ id: `task:${t.id}`, type: "task", label: `${t.id} ${t.title}`, status: t.status, due: t.due, overdue: isOverdue(t.due, t.status), locked: t.status !== "done" && ix.order.blockedBy(t.id).length > 0, sequence: ix.order.sequence.get(t.id) ?? null, department: (ix.departments.get(t.id) ?? [])[0] ?? null, live: !!liveFor(c.db, t.id), parent_id: t.parent_id ? `task:${t.parent_id}` : null });
     edges.push(t.parent_id ? { source: `task:${t.parent_id}`, target: `task:${t.id}`, type: "subtask" } : { source: `milestone:${t.milestone_id}`, target: `task:${t.id}`, type: "contains" });
     for (const w of ix.workers.get(t.id) ?? []) { people.add(w); edges.push({ source: `person:${w}`, target: `task:${t.id}`, type: "works_on" }); }
   }
@@ -300,6 +316,11 @@ function workerTask(c: Ctx, id: string) {
   const ix = loadIndex(c.db);
   const t = visibleTask(c, ix, id);
   if (!isWorker(ix, c.user, id)) throw new Forbidden(`${c.user.name} is not a worker on ${id}; only its workers can change it`);
+  const open = t.status === "done" ? [] : ix.order.blockedBy(id);
+  if (open.length) {
+    const list = open.map(d => `${d} (${ix.order.status.get(d)})`).join(", ");
+    throw new Locked(`${id} is locked until its prerequisites are done: ${list}. Work on another unlocked task (see next_task) or wait for approval.`);
+  }
   return t;
 }
 
@@ -385,6 +406,18 @@ export function attachArtifact(c: Ctx, id: string, a: { name: string; mime: stri
     const url = `/api/artifacts/${aid}`;
     return { id: aid, url, markdown: a.mime.startsWith("image/") ? `![${a.name}](${url})` : `[${a.name}](${url})` };
   });
+}
+
+/** The suggested next task for the caller: first unlocked todo/in-progress task they work on, by sequence. */
+export function nextTask(c: Ctx) {
+  const mine = listTasks(c, { mine: true }).filter(t => t.workers.some(w => w.id === c.user.id));
+  const open = mine.filter(t => t.status === "todo" || t.status === "in_progress");
+  const next = open.find(t => !t.locked);
+  return {
+    next: next ?? null,
+    waiting: open.filter(t => t.locked).map(t => ({ id: t.id, title: t.title, blocked_by: t.blocked_by })),
+    note: next ? "Suggested order only: any unlocked task may be done first." : open.length ? "All your open tasks are locked by prerequisites that aren't done yet." : "No open tasks.",
+  };
 }
 
 // ---------- human writes (UI) ----------

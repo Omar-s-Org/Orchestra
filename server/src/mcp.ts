@@ -28,7 +28,9 @@ function buildServer(c: S.Ctx) {
 
   server.registerTool("whoami", { description: "Who you act for: your human's name, role (pm/senior/junior), department and the project." },
     () => run(() => S.me(c)));
-  server.registerTool("list_my_tasks", { description: "Tasks where your human is a worker or has access. Start here." },
+  server.registerTool("next_task", { description: "Start here: your suggested next task (prerequisites first, then due date), plus your locked tasks and what they wait on. Suggested order only; any unlocked task may be done first." },
+    () => run(() => S.nextTask(c)));
+  server.registerTool("list_my_tasks", { description: "Tasks where your human is a worker or has access, in suggested order (field `sequence`). Tasks with `locked: true` wait on prerequisites in `blocked_by` and can't be started yet." },
     () => run(() => S.listTasks(c, { mine: true })));
   server.registerTool("team_board", {
     description: "Every task you are allowed to see (your department at or below your level; the PM sees all). Optional status filter.",
@@ -39,7 +41,7 @@ function buildServer(c: S.Ctx) {
     inputSchema: { task_id: z.string() },
   }, ({ task_id }) => run(() => S.getTask(c, task_id)));
   server.registerTool("start_task", {
-    description: "Announce you are starting work on a task (moves todo → in_progress and shows you live on the board). Give a one-line plan.",
+    description: "Announce you are starting work on a task (moves todo → in_progress and shows you live on the board). Give a one-line plan. Fails if the task is locked (a prerequisite isn't done yet).",
     inputSchema: { task_id: z.string(), plan: z.string().describe("What you are about to do, one or two sentences") },
   }, ({ task_id, plan }) => run(() => S.startTask(c, task_id, plan)));
   server.registerTool("report_progress", {

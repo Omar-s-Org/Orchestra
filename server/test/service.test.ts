@@ -60,8 +60,15 @@ describe("unified visibility rule", () => {
   });
 });
 
+/** Priya submits T-4 and Sara approves it, which unlocks T-6 (Omar) and T-7 (Hassan). */
+function finishT4() {
+  S.submitTask(agent("priya"), "T-4", { summary: "Product API complete with search and recommendations." });
+  S.approveTask(ui("sara"), "T-4");
+}
+
 describe("agent workflow", () => {
   it("start → report → attach → submit → senior approves", () => {
+    finishT4();
     const a = agent("hassan");
     expect(S.startTask(a, "T-7", "Write e2e tests").status).toBe("in_progress");
     S.reportProgress(a, "T-7", { summary: "Used a **test agent** to write 12 tests against T-4.", agentsUsed: ["test agent"], costUsd: 0.4 });
@@ -76,6 +83,7 @@ describe("agent workflow", () => {
   });
   it("juniors and their agents can never approve", () => {
     expect(S.getTask(ui("john"), "T-4").allowed_actions).toEqual([]);
+    finishT4();
     S.submitTask(agent("hassan"), "T-7", { summary: "Finished all the integration tests." });
     expect(() => S.approveTask(ui("john"), "T-7")).toThrow(/can't approve/);
     const denied = db.prepare("SELECT * FROM audit WHERE allowed=0").get() as { actor_id: string };
@@ -92,13 +100,44 @@ describe("agent workflow", () => {
     expect(S.reopenTask(ui("tom"), "T-8", "Shorter headline please").status).toBe("in_progress");
   });
   it("mentioning a task id in a report creates a graph edge", () => {
-    S.reportProgress(agent("hassan"), "T-14", { summary: "Load profile based on T-5 traffic estimates" });
-    expect(S.getTask(ui("layla"), "T-14").mentions.map(m => m.id)).toContain("T-5");
+    S.reportProgress(agent("priya"), "T-11", { summary: "Search ranking reuses the T-5 feature store" });
+    expect(S.getTask(ui("layla"), "T-11").mentions.map(m => m.id)).toContain("T-5");
   });
   it("reporting marks the agent live on the task", () => {
+    finishT4();
     S.startTask(agent("omar"), "T-6", "Build sign-up screen");
     expect(S.getTask(ui("layla"), "T-6").live).toMatchObject({ agent_name: "omar-bot", activity: "Build sign-up screen" });
     expect(S.liveAgents(ui("sara")).map(a => a.user.id)).toContain("omar");
+  });
+});
+
+describe("prerequisites and suggested order", () => {
+  it("a task is locked until every prerequisite is done (approved), then unlocks", () => {
+    const t6 = S.getTask(ui("omar"), "T-6");
+    expect(t6).toMatchObject({ locked: true, blocked_by: [{ id: "T-4", status: "in_progress" }] });
+    expect(() => S.startTask(agent("omar"), "T-6", "go")).toThrow(/locked until its prerequisites are done: T-4 \(in_progress\)/);
+    expect(() => S.reportProgress(agent("omar"), "T-6", { summary: "x" })).toThrow(/locked/);
+    const refused = db.prepare("SELECT * FROM audit WHERE action='start_task' AND allowed=0").get();
+    expect(refused).toBeTruthy();
+    S.submitTask(agent("priya"), "T-4", { summary: "Product API complete with search and recommendations." });
+    expect(S.getTask(ui("omar"), "T-6").locked).toBe(true);   // review isn't enough
+    S.approveTask(ui("sara"), "T-4");
+    expect(S.getTask(ui("omar"), "T-6")).toMatchObject({ locked: false, blocked_by: [] });
+    expect(S.startTask(agent("omar"), "T-6", "Build sign-up").status).toBe("in_progress");
+  });
+  it("suggested order puts prerequisites first", () => {
+    const seq = new Map(S.listTasks(ui("layla")).map(t => [t.id, t.sequence!]));
+    expect(seq.get("T-3")!).toBeLessThan(seq.get("T-5")!);
+    expect(seq.get("T-5")!).toBeLessThan(seq.get("T-9")!);
+    expect(seq.get("T-9")!).toBeLessThan(seq.get("T-13")!);
+    const list = S.listTasks(ui("layla")).map(t => t.sequence);
+    expect(list).toEqual([...list].sort((a, b) => a! - b!)); // lists come back in suggested order
+  });
+  it("next_task picks the first unlocked task and explains what's waiting", () => {
+    expect(S.nextTask(agent("john")).next?.id).toBe("T-5");
+    const omar = S.nextTask(agent("omar"));
+    expect(omar.next).toBeNull();
+    expect(omar.waiting).toEqual([{ id: "T-6", title: "Onboarding UI", blocked_by: [{ id: "T-4", title: "Build product API", status: "in_progress" }] }]);
   });
 });
 
