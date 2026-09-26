@@ -5,6 +5,7 @@ import * as S from "./service.js";
 import { reset } from "./seed.js";
 import { mountMcp } from "./mcp.js";
 import { Forbidden } from "./permissions.js";
+import { startDemo, stopDemo, demoStatus } from "./demo-runner.js";
 
 type AuthedReq = Request & { ctx: S.Ctx; token: string };
 
@@ -31,6 +32,10 @@ export function createApp(db: DB) {
 
   app.get("/api/health", (_req, res) => { res.json({ ok: true }); });
   app.post("/api/auth/login", (req, res) => send(res, () => S.login(db, req.body?.email, req.body?.password)));
+
+  // DEMO ONLY: who can log in (no passwords); lets the login screen list the current project's people.
+  app.get("/api/demo/accounts", (_req, res) => send(res, () =>
+    db.prepare("SELECT email, name, role, department, title FROM users ORDER BY CASE role WHEN 'pm' THEN 0 WHEN 'senior' THEN 1 ELSE 2 END, name").all()));
 
   mountMcp(app, db);
 
@@ -78,6 +83,11 @@ export function createApp(db: DB) {
   r.post("/kb", h((c, req) => S.createDoc(c, req.body ?? {})));
   r.post("/webhooks", h((c, req) => S.addWebhook(c, req.body ?? {})));
   r.get("/audit", h(c => S.auditLog(c)));
+  // Run demo: load a demo project and let its simulated agents work it (PM only). Humans approve in the UI.
+  const pmOnly = (c: S.Ctx) => { if (c.user.role !== "pm") throw new Forbidden("Only the PM can run the demo"); };
+  r.get("/demo/status", h(c => demoStatus(c.db)));
+  r.post("/demo/run", h((c, req) => { pmOnly(c); return startDemo(db, `http://127.0.0.1:${req.socket.localPort}`, req.body ?? {}); }));
+  r.post("/demo/stop", h(c => { pmOnly(c); return stopDemo(db); }));
   // Wipes all data, so it needs the PM (the URL may be public when hosted).
   r.post("/demo/reset", h(c => {
     if (c.user.role !== "pm") throw new Forbidden("Only the PM can reset the demo");

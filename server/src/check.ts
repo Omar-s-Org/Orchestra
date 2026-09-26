@@ -107,6 +107,9 @@ export async function runChecks(baseUrl: string, accounts: Accounts = DEFAULT_AC
   const kbPm = await expect("kb (pm)", "/api/kb", C.KbListItem.array(), pm);
   const pmOnly = kbPm?.find(d => d.min_role === "pm");
   if (pmOnly) await expectStatus(`kb PM-only doc (junior) → 403 (${pmOnly.id})`, `/api/kb/${pmOnly.id}`, 403, junior);
+  await expect("demo/accounts (public)", "/api/demo/accounts", C.DemoAccount.array());
+  await expect("demo/status", "/api/demo/status", C.DemoStatus, junior);
+  // Deliberately no POST /api/demo/run, /stop or /reset probes (they change data).
   // Deliberately no POST /api/demo/reset probe: if its PM check ever regressed, this read-only checker
   // would wipe the hosted demo. test/api.test.ts covers reset permissions instead.
   return results;
