@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "load": "tsx src/seed-cli.ts",
     "sim": "tsx sim/run.ts",
-    "check": "tsx scripts/check.ts"
+    "check": "tsx scripts/check.ts",
+    "mcp:budget": "tsx scripts/mcp-budget.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.1",

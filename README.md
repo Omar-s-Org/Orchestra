@@ -61,17 +61,20 @@ claude mcp add --transport http orchestra http://localhost:8787/mcp --header "Au
 ```
 Optional header `X-Agent-Name: Omar's Claude` sets the name shown in the live view.
 
-| Tool | Args | Effect |
+Tools are shaped to save the agent tokens: writes return a short acknowledgement, one call gives everything needed to start a task, and full detail is opt-in. One task costs about **1,350 tokens** of MCP context, where it used to cost about 5,840 (`npm run mcp:budget`). Results are compact JSON; empty fields are left out.
+
+| Tool | Args | Returns |
 |---|---|---|
-| `whoami` | none | your person, role, department, project |
-| `next_task` | none | **start here**: your suggested next unlocked task + your locked tasks and what they wait on |
-| `list_my_tasks` / `team_board` | `status?` | tasks you work on / everything you may see |
-| `get_task` | `task_id` | full task incl. dependencies, docs, updates |
-| `start_task` | `task_id, plan` | todo → in_progress; shows you live |
-| `report_progress` | `task_id, summary, agents_used?, cost_usd?, links?` | markdown explanation; mention `T-12` to link tasks |
-| `attach_artifact` | `task_id, name, mime, base64? \| text?` | returns `url` + ready `markdown` to embed |
-| `submit_task` | `task_id, explanation, agents_used?, cost_usd?, links?` | → review (a senior/PM approves in the UI) |
+| `next_task` | `task_id?` | **start here**: brief of your next unlocked task (or `task_id`): description, scope, prerequisites, docs inline, latest update; who you are; what's locked |
+| `start_task` | `task_id, plan` | todo → in_progress, shows you live · `{ok, id, status}` |
+| `report_progress` | `task_id, summary, agents_used?, cost_usd?, links?` | markdown, at most ~80 words; mention `T-12` to link tasks · `{ok, id, status}` |
+| `attach_artifact` | `task_id, name, mime, base64? \| text?` | `url` + ready `markdown` to embed |
+| `submit_task` | `task_id, explanation, agents_used?, cost_usd?, links?` | → review (a senior/PM approves in the UI) · `{ok, id, status, next}` |
+| `get_task` | `task_id, include?, history_limit?` | any visible task; `include`: `history`, `artifacts`, `links`, `subtasks` or `all`; `include:["all"], history_limit:0` = the full REST detail |
+| `team_board` | `status?, department?, person?, mine?` | one compact row per task you may see |
 | `search_kb` / `read_kb` | `query?` / `doc_id` | knowledge base, filtered by clearance |
+
+Errors start with their type: `Locked (409)` (prerequisites not approved yet), `Forbidden (403)`, `NotFound (404)`, `BadRequest (400)`. Testing with real agents: [docs/AGENT_TESTING.md](docs/AGENT_TESTING.md).
 
 Rules the server enforces: a task is **locked** until all its prerequisites (`depends_on`) are **done** (approved), so it can't be started, reported on or submitted before then; tasks come in a suggested order (`sequence`: prerequisites first, then due date), but any unlocked task may be done first; only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat (agent shows "active" for 60 s).
 
