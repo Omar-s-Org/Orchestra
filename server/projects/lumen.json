@@ -1,0 +1,591 @@
+{
+  "project": {
+    "id": "P-L",
+    "name": "Lumen: AI Support Assistant",
+    "description": "Lumen is a 12-person startup shipping **Lumen Assist**, an AI assistant that answers customer-support tickets from the help center and hands off to humans when unsure. Goal: beta with 20 customers by 2 Oct, public launch 16 Oct."
+  },
+  "people": [
+    {
+      "id": "layla",
+      "name": "Layla Haddad",
+      "role": "pm",
+      "department": "Management",
+      "title": "CEO & Product Lead",
+      "email": "layla@lumen.test"
+    },
+    {
+      "id": "sara",
+      "name": "Sara Weber",
+      "role": "senior",
+      "department": "Engineering",
+      "title": "Head of Engineering",
+      "email": "sara@lumen.test"
+    },
+    {
+      "id": "tom",
+      "name": "Tom Berger",
+      "role": "senior",
+      "department": "Growth",
+      "title": "Head of Growth",
+      "email": "tom@lumen.test"
+    },
+    {
+      "id": "priya",
+      "name": "Priya Nair",
+      "role": "junior",
+      "department": "Engineering",
+      "title": "ML Engineer",
+      "email": "priya@lumen.test"
+    },
+    {
+      "id": "john",
+      "name": "John Carter",
+      "role": "junior",
+      "department": "Engineering",
+      "title": "Backend Engineer",
+      "email": "john@lumen.test"
+    },
+    {
+      "id": "omar",
+      "name": "Omar",
+      "role": "junior",
+      "department": "Engineering",
+      "title": "Frontend Engineer",
+      "email": "omar@lumen.test"
+    },
+    {
+      "id": "hassan",
+      "name": "Hassan",
+      "role": "junior",
+      "department": "Engineering",
+      "title": "QA & DevOps Engineer",
+      "email": "hassan@lumen.test"
+    },
+    {
+      "id": "mia",
+      "name": "Mia Hofer",
+      "role": "junior",
+      "department": "Growth",
+      "title": "Growth Marketer",
+      "email": "mia@lumen.test"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M-1",
+      "name": "Discovery & design",
+      "due": "2026-09-20"
+    },
+    {
+      "id": "M-2",
+      "name": "Beta: Lumen Assist v1",
+      "due": "2026-10-02"
+    },
+    {
+      "id": "M-3",
+      "name": "Public launch",
+      "due": "2026-10-16"
+    }
+  ],
+  "docs": [
+    {
+      "id": "K-1",
+      "title": "Beta brief: Lumen Assist v1",
+      "body": "# Beta brief\n\n**Problem:** support teams answer the same questions all day; first replies take hours.\n\n**Beta scope:** answer tickets from the help center with **cited sources**, hand off to a human when confidence is low, live chat widget.\n\n## Success metrics\n- ≥ 70% of beta tickets answered without a human\n- answer accuracy ≥ 90% on the eval set\n- p95 answer time < 3 s\n- 20 beta customers by 2 Oct",
+      "min_role": "junior",
+      "author": "layla"
+    },
+    {
+      "id": "K-2",
+      "title": "Support tone guide",
+      "body": "# Tone\n\nFriendly, short, specific. Always cite the help-center article. Never guess: if unsure, say so and hand off to a human.",
+      "min_role": "junior",
+      "author": "tom"
+    },
+    {
+      "id": "K-3",
+      "title": "Eval rubric",
+      "body": "# Eval rubric\n\nEach answer is graded on: **correct** (matches the article), **cited** (links the right source), **safe** (no invented policy). A ticket passes only if all three hold.",
+      "min_role": "junior",
+      "author": "sara"
+    },
+    {
+      "id": "K-4",
+      "title": "ADR: retrieval stack",
+      "body": "# ADR-001: retrieval stack\n\n- Embeddings + hybrid search (BM25 + vectors) over the help center\n- Answers must cite ≥ 1 source chunk\n- Confidence < 0.6 → hand off to a human",
+      "min_role": "senior",
+      "author": "sara"
+    },
+    {
+      "id": "K-5",
+      "title": "Runway & budget",
+      "body": "# Runway (confidential)\n\n- Cash: €1.4m, runway 16 months\n- AI spend cap for the beta: €2,500 / month",
+      "min_role": "pm",
+      "author": "layla"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-1",
+      "title": "Define beta scope & success metrics",
+      "milestone": "M-1",
+      "due": "2026-09-15",
+      "status": "done",
+      "departments": [
+        "Management"
+      ],
+      "workers": [
+        "layla"
+      ],
+      "docs": [
+        "K-1"
+      ],
+      "description": "Agree what Lumen Assist v1 must do for the beta and how we measure it.",
+      "scope": "In: scope, metrics, beta customer profile. Out: pricing."
+    },
+    {
+      "id": "T-2",
+      "title": "Choose the retrieval architecture",
+      "milestone": "M-1",
+      "due": "2026-09-17",
+      "status": "done",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "sara"
+      ],
+      "docs": [
+        "K-4"
+      ],
+      "description": "Decide how answers are retrieved and cited. Recorded as ADR-001.",
+      "scope": "In: search approach, citation rule, hand-off threshold."
+    },
+    {
+      "id": "T-3",
+      "title": "Interview 12 support leads",
+      "milestone": "M-1",
+      "due": "2026-09-18",
+      "status": "done",
+      "departments": [
+        "Growth"
+      ],
+      "workers": [
+        "tom"
+      ],
+      "description": "Find the biggest support pain points to shape the beta.",
+      "scope": "In: 12 interviews, synthesis. Out: pricing questions."
+    },
+    {
+      "id": "T-4",
+      "title": "Beta waitlist landing page",
+      "milestone": "M-1",
+      "due": "2026-09-19",
+      "status": "done",
+      "departments": [
+        "Growth"
+      ],
+      "workers": [
+        "mia"
+      ],
+      "docs": [
+        "K-2"
+      ],
+      "description": "Waitlist page for beta customers, built on the interview insights from T-3.",
+      "scope": "In: page copy, signup form."
+    },
+    {
+      "id": "T-5",
+      "title": "Build the help-center ingestion pipeline",
+      "milestone": "M-2",
+      "due": "2026-09-28",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "priya"
+      ],
+      "depends_on": [
+        "T-2"
+      ],
+      "docs": [
+        "K-4"
+      ],
+      "description": "Import all help-center articles, split them into chunks and index them for hybrid search, as decided in T-2.",
+      "scope": "In: import, chunking, embeddings, index. Out: answering (T-9)."
+    },
+    {
+      "id": "T-6",
+      "title": "Ticket API & authentication",
+      "milestone": "M-2",
+      "due": "2026-09-28",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "john"
+      ],
+      "depends_on": [
+        "T-1"
+      ],
+      "description": "REST API that receives support tickets from customers' helpdesks and returns answers.",
+      "scope": "In: endpoints, API keys, rate limits. Out: hand-off (T-10)."
+    },
+    {
+      "id": "T-7",
+      "title": "Chat widget UI",
+      "milestone": "M-2",
+      "due": "2026-09-28",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "omar"
+      ],
+      "depends_on": [
+        "T-1"
+      ],
+      "docs": [
+        "K-2"
+      ],
+      "description": "Embeddable chat widget customers add to their site; follows the tone guide.",
+      "scope": "In: widget UI, theming, mobile. Out: live answers (T-11)."
+    },
+    {
+      "id": "T-8",
+      "title": "CI pipeline & staging environment",
+      "milestone": "M-2",
+      "due": "2026-09-28",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "hassan"
+      ],
+      "depends_on": [
+        "T-2"
+      ],
+      "description": "Automated tests on every push and a staging environment for the beta.",
+      "scope": "In: CI, staging deploy, secrets. Out: load testing (T-13)."
+    },
+    {
+      "id": "T-9",
+      "title": "Answer engine with cited sources",
+      "milestone": "M-2",
+      "due": "2026-09-30",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "priya"
+      ],
+      "depends_on": [
+        "T-5"
+      ],
+      "docs": [
+        "K-3",
+        "K-4"
+      ],
+      "description": "Generate answers from the indexed help center (T-5) with at least one cited source; low confidence hands off (T-10).",
+      "scope": "In: retrieval, answer generation, citations, confidence score."
+    },
+    {
+      "id": "T-10",
+      "title": "Human hand-off for low-confidence tickets",
+      "milestone": "M-2",
+      "due": "2026-09-30",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "john"
+      ],
+      "depends_on": [
+        "T-6"
+      ],
+      "description": "When the answer engine is unsure, route the ticket to a human agent with context, using the ticket API (T-6).",
+      "scope": "In: routing, context summary, helpdesk integration."
+    },
+    {
+      "id": "T-11",
+      "title": "Connect the widget to live answers",
+      "milestone": "M-2",
+      "due": "2026-09-30",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "omar"
+      ],
+      "depends_on": [
+        "T-7",
+        "T-6"
+      ],
+      "description": "Stream answers from the ticket API (T-6) into the chat widget (T-7), with sources shown under each answer.",
+      "scope": "In: streaming, source cards, error states."
+    },
+    {
+      "id": "T-12",
+      "title": "Evaluation harness on 200 real tickets",
+      "milestone": "M-2",
+      "due": "2026-09-30",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "hassan"
+      ],
+      "depends_on": [
+        "T-8"
+      ],
+      "docs": [
+        "K-3"
+      ],
+      "description": "Automatically grade answers against the eval rubric on 200 anonymised tickets, in CI (T-8).",
+      "scope": "In: test set, grading, CI report."
+    },
+    {
+      "id": "T-13",
+      "title": "Beta readiness: load test & go/no-go report",
+      "milestone": "M-2",
+      "due": "2026-10-01",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "hassan"
+      ],
+      "depends_on": [
+        "T-9",
+        "T-10",
+        "T-11",
+        "T-12"
+      ],
+      "description": "Load-test the full system and write the go/no-go report for the beta.",
+      "scope": "In: load test, eval results, risks, recommendation."
+    },
+    {
+      "id": "T-14",
+      "title": "Tune answers from eval results",
+      "milestone": "M-2",
+      "due": "2026-10-01",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "priya"
+      ],
+      "depends_on": [
+        "T-9",
+        "T-12"
+      ],
+      "docs": [
+        "K-3"
+      ],
+      "description": "Use the eval harness (T-12) to improve the answer engine (T-9) before the beta.",
+      "scope": "In: prompt and retrieval tuning. Out: new features."
+    },
+    {
+      "id": "T-15",
+      "title": "Launch campaign",
+      "milestone": "M-3",
+      "due": "2026-10-14",
+      "status": "todo",
+      "departments": [
+        "Growth"
+      ],
+      "workers": [
+        "mia"
+      ],
+      "depends_on": [
+        "T-13"
+      ],
+      "docs": [
+        "K-2"
+      ],
+      "description": "Announce the public launch to the waitlist from T-4 and the press.",
+      "scope": "In: emails, social, press kit."
+    },
+    {
+      "id": "T-16",
+      "title": "Pricing page & plans",
+      "milestone": "M-3",
+      "due": "2026-09-25",
+      "status": "in_progress",
+      "departments": [
+        "Growth"
+      ],
+      "workers": [
+        "tom"
+      ],
+      "access": [
+        "layla"
+      ],
+      "description": "Plans and pricing for the public launch, based on the interviews (T-3).",
+      "scope": "In: plans, page copy. Out: billing integration."
+    },
+    {
+      "id": "T-17",
+      "title": "Security review before launch",
+      "milestone": "M-3",
+      "due": "2026-10-10",
+      "status": "todo",
+      "departments": [
+        "Engineering"
+      ],
+      "workers": [
+        "sara"
+      ],
+      "depends_on": [
+        "T-13"
+      ],
+      "description": "Review data handling, API keys and prompt-injection risks before the public launch.",
+      "scope": "In: threat model, fixes list."
+    }
+  ],
+  "history": [
+    {
+      "task": "T-1",
+      "user": "layla",
+      "kind": "completion",
+      "summary": "Scoped the beta with a **research agent** (competitor teardown of 6 support AIs) and a **writer agent** (beta brief K-1). Key call: every answer must cite its source.",
+      "agents_used": [
+        "research agent",
+        "writer agent"
+      ],
+      "cost_usd": 0.92,
+      "minutes_ago": 4300,
+      "status_from": "in_progress",
+      "status_to": "review"
+    },
+    {
+      "task": "T-1",
+      "user": "layla",
+      "kind": "approval",
+      "summary": "Approved.",
+      "agents_used": [],
+      "cost_usd": 0,
+      "minutes_ago": 4290,
+      "via": "ui",
+      "status_from": "review",
+      "status_to": "done"
+    },
+    {
+      "task": "T-2",
+      "user": "sara",
+      "kind": "completion",
+      "summary": "Compared 3 retrieval stacks with a **research agent**; a **prototype agent** built a spike on 300 articles. Hybrid search won on accuracy (+11 pts). Recorded as ADR-001.",
+      "agents_used": [
+        "research agent",
+        "prototype agent"
+      ],
+      "cost_usd": 1.46,
+      "minutes_ago": 4000,
+      "status_from": "in_progress",
+      "status_to": "review"
+    },
+    {
+      "task": "T-2",
+      "user": "layla",
+      "kind": "approval",
+      "summary": "Approved: go with hybrid search.",
+      "agents_used": [],
+      "cost_usd": 0,
+      "minutes_ago": 3990,
+      "via": "ui",
+      "status_from": "review",
+      "status_to": "done"
+    },
+    {
+      "task": "T-3",
+      "user": "tom",
+      "kind": "completion",
+      "summary": "12 interviews transcribed and clustered by a **research agent**; a **synthesis agent** ranked the pain points.\n\n![Top pain points](/api/artifacts/b7c1d2e3f4a50617)\n\nRepeat questions are the #1 pain (67%). This shaped the beta brief (T-1) and the waitlist page (T-4).",
+      "agents_used": [
+        "research agent",
+        "synthesis agent"
+      ],
+      "cost_usd": 1.18,
+      "minutes_ago": 3700,
+      "status_from": "in_progress",
+      "status_to": "review"
+    },
+    {
+      "task": "T-3",
+      "user": "layla",
+      "kind": "approval",
+      "summary": "Great insight. Approved.",
+      "agents_used": [],
+      "cost_usd": 0,
+      "minutes_ago": 3690,
+      "via": "ui",
+      "status_from": "review",
+      "status_to": "done"
+    },
+    {
+      "task": "T-4",
+      "user": "mia",
+      "kind": "completion",
+      "summary": "A **copywriting agent** wrote 3 headline variants from the interview quotes (T-3); the winner converts at 6.8%. 214 teams on the waitlist.",
+      "agents_used": [
+        "copywriting agent",
+        "analytics agent"
+      ],
+      "cost_usd": 0.71,
+      "minutes_ago": 3300,
+      "status_from": "in_progress",
+      "status_to": "review",
+      "links": [
+        {
+          "label": "Waitlist page",
+          "url": "https://example.com/lumen/waitlist"
+        }
+      ]
+    },
+    {
+      "task": "T-4",
+      "user": "tom",
+      "kind": "approval",
+      "summary": "Approved.",
+      "agents_used": [],
+      "cost_usd": 0,
+      "minutes_ago": 3290,
+      "via": "ui",
+      "status_from": "review",
+      "status_to": "done"
+    },
+    {
+      "task": "T-16",
+      "user": "tom",
+      "kind": "progress",
+      "summary": "A **research agent** compared pricing of 8 support-AI tools; drafting 3 plans (Starter / Team / Scale).",
+      "agents_used": [
+        "research agent"
+      ],
+      "cost_usd": 0.64,
+      "minutes_ago": 240
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "b7c1d2e3f4a50617",
+      "task": "T-3",
+      "user": "tom",
+      "name": "pain-points.svg",
+      "mime": "image/svg+xml",
+      "text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"480\" height=\"260\" viewBox=\"0 0 480 260\"><rect width=\"480\" height=\"260\" fill=\"#0f172a\"/><text x=\"24\" y=\"38\" fill=\"#e2e8f0\" font-family=\"Inter,Arial\" font-size=\"18\">Top support pain points (12 interviews)</text><rect x=\"40\" y=\"82\" width=\"104\" height=\"130\" rx=\"4\" fill=\"#22c55e\"/><text x=\"92\" y=\"74\" fill=\"#e2e8f0\" font-family=\"Arial\" font-size=\"13\" text-anchor=\"middle\">67%</text><text x=\"92\" y=\"232\" fill=\"#cbd5e1\" font-family=\"Arial\" font-size=\"12\" text-anchor=\"middle\">Repeat questions</text><rect x=\"188\" y=\"130\" width=\"104\" height=\"82\" rx=\"4\" fill=\"#64748b\"/><text x=\"240\" y=\"122\" fill=\"#e2e8f0\" font-family=\"Arial\" font-size=\"13\" text-anchor=\"middle\">42%</text><text x=\"240\" y=\"232\" fill=\"#cbd5e1\" font-family=\"Arial\" font-size=\"12\" text-anchor=\"middle\">Slow first reply</text><rect x=\"336\" y=\"154\" width=\"104\" height=\"58\" rx=\"4\" fill=\"#64748b\"/><text x=\"388\" y=\"146\" fill=\"#e2e8f0\" font-family=\"Arial\" font-size=\"13\" text-anchor=\"middle\">29%</text><text x=\"388\" y=\"232\" fill=\"#cbd5e1\" font-family=\"Arial\" font-size=\"12\" text-anchor=\"middle\">Night coverage</text></svg>",
+      "minutes_ago": 3710
+    }
+  ],
+  "live_agents": []
+}

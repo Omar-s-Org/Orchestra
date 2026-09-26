@@ -1,0 +1,437 @@
+{
+  "T-5": {
+    "plan": "Import all 1,240 help-center articles, chunk them and build the hybrid search index from ADR-001 (T-2).",
+    "progress": [
+      {
+        "summary": "A **scraper agent** pulled 1,240 articles from the help center (Zendesk export); a **cleaning agent** removed 86 outdated duplicates.",
+        "agents_used": [
+          "scraper agent",
+          "cleaning agent"
+        ],
+        "cost_usd": 0.58
+      },
+      {
+        "summary": "A **coding agent** built the chunker (400-token chunks, 15% overlap) and the hybrid index: 9,812 chunks, BM25 + embeddings.",
+        "agents_used": [
+          "coding agent"
+        ],
+        "cost_usd": 1.12
+      }
+    ],
+    "completion": {
+      "explanation": "Help center is indexed and searchable.\n\n{{artifact}}\n\n- **How:** scraper + cleaning agents for the import, a coding agent for chunking and the hybrid index (as ADR-001, T-2 decided).\n- **Result:** 9,812 chunks; top-5 retrieval hit rate **94%** on 100 sample questions.\n- Ready for the answer engine (T-9).",
+      "agents_used": [
+        "scraper agent",
+        "cleaning agent",
+        "coding agent"
+      ],
+      "cost_usd": 0.41
+    },
+    "artifact": {
+      "name": "retrieval-hit-rate.svg",
+      "chart": {
+        "title": "Retrieval hit rate (top-5)",
+        "bars": [
+          {
+            "label": "Keyword only",
+            "value": 71
+          },
+          {
+            "label": "Vectors only",
+            "value": 86
+          },
+          {
+            "label": "Hybrid",
+            "value": 94
+          }
+        ],
+        "unit": "%"
+      }
+    }
+  },
+  "T-6": {
+    "plan": "Build the ticket API: receive tickets from customers' helpdesks, return answers, with API keys and rate limits.",
+    "progress": [
+      {
+        "summary": "A **coding agent** scaffolded `POST /v1/tickets` and `GET /v1/tickets/:id` with per-customer API keys.",
+        "agents_used": [
+          "coding agent"
+        ],
+        "cost_usd": 0.66
+      },
+      {
+        "summary": "A **test agent** wrote 31 tests; a **security agent** added rate limiting (60 req/min per key) and key rotation.",
+        "agents_used": [
+          "test agent",
+          "security agent"
+        ],
+        "cost_usd": 0.74
+      }
+    ],
+    "completion": {
+      "explanation": "Ticket API v1 is live on staging.\n\n- `POST /v1/tickets` → answer or hand-off, `GET /v1/tickets/:id` for status\n- API keys per customer, 60 req/min rate limit, key rotation\n- 31 tests green (coding, test and security agents)\n\nThe widget (T-11) and the hand-off (T-10) build on it.",
+      "agents_used": [
+        "coding agent",
+        "test agent",
+        "security agent"
+      ],
+      "cost_usd": 0.38,
+      "links": [
+        {
+          "label": "API reference",
+          "url": "https://example.com/lumen/api"
+        }
+      ]
+    }
+  },
+  "T-7": {
+    "plan": "Build the embeddable chat widget following the support tone guide: theming, mobile, accessibility.",
+    "progress": [
+      {
+        "summary": "A **design agent** produced 3 widget layouts from the tone guide; picked the compact one (fits 320 px screens).",
+        "agents_used": [
+          "design agent"
+        ],
+        "cost_usd": 0.52
+      },
+      {
+        "summary": "A **coding agent** built the widget as a 38 KB script with light/dark theming; an **accessibility agent** fixed 7 contrast and focus issues.",
+        "agents_used": [
+          "coding agent",
+          "accessibility agent"
+        ],
+        "cost_usd": 0.81
+      }
+    ],
+    "completion": {
+      "explanation": "Chat widget ready: one `<script>` tag, 38 KB, themeable, WCAG AA.\n\n{{artifact}}\n\nDesign, coding and accessibility agents. Next: live answers (T-11).",
+      "agents_used": [
+        "design agent",
+        "coding agent",
+        "accessibility agent"
+      ],
+      "cost_usd": 0.29
+    },
+    "artifact": {
+      "name": "widget-load-time.svg",
+      "chart": {
+        "title": "Widget load time on 4G",
+        "bars": [
+          {
+            "label": "Prototype",
+            "value": 1.9
+          },
+          {
+            "label": "Optimised",
+            "value": 0.6
+          }
+        ],
+        "unit": " s"
+      }
+    }
+  },
+  "T-8": {
+    "plan": "Set up CI on every push and a staging environment for the beta.",
+    "progress": [
+      {
+        "summary": "A **devops agent** set up CI: lint, typecheck and tests on every push, about 3 min per run.",
+        "agents_used": [
+          "devops agent"
+        ],
+        "cost_usd": 0.47
+      },
+      {
+        "summary": "Staging deploys automatically from `main`; a **security agent** moved all secrets into the vault.",
+        "agents_used": [
+          "devops agent",
+          "security agent"
+        ],
+        "cost_usd": 0.55
+      }
+    ],
+    "completion": {
+      "explanation": "CI and staging are live.\n\n- Every push: lint, typecheck, tests (about 3 min)\n- Staging auto-deploys from `main`, secrets in the vault\n\nThe eval harness (T-12) will run in this CI.",
+      "agents_used": [
+        "devops agent",
+        "security agent"
+      ],
+      "cost_usd": 0.22
+    }
+  },
+  "T-9": {
+    "plan": "Build the answer engine on top of the index (T-5): retrieve, answer, cite at least one source, and score confidence for hand-off (T-10).",
+    "progress": [
+      {
+        "summary": "A **retrieval agent** tuned hybrid weights (0.4 BM25 / 0.6 vectors); a **prompt agent** wrote the answer prompt with mandatory citations.",
+        "agents_used": [
+          "retrieval agent",
+          "prompt agent"
+        ],
+        "cost_usd": 1.36
+      },
+      {
+        "summary": "Added a confidence score; below 0.6 the ticket goes to a human (T-10). An **eval agent** checked 100 tickets: 88% correct and cited.",
+        "agents_used": [
+          "prompt agent",
+          "eval agent"
+        ],
+        "cost_usd": 1.21
+      }
+    ],
+    "completion": {
+      "explanation": "Answer engine v1 is ready.\n\n{{artifact}}\n\n- **How:** a retrieval agent tuned search, a prompt agent wrote the cited-answer prompt, and an eval agent graded 100 tickets.\n- **Result:** 88% correct and cited; every answer links its help-center source; low confidence hands off (T-10).\n- Tuning continues in T-14 once the eval harness (T-12) runs on 200 tickets.",
+      "agents_used": [
+        "retrieval agent",
+        "prompt agent",
+        "eval agent"
+      ],
+      "cost_usd": 0.57
+    },
+    "artifact": {
+      "name": "answer-accuracy.svg",
+      "chart": {
+        "title": "Answer accuracy (100 tickets)",
+        "bars": [
+          {
+            "label": "No retrieval",
+            "value": 41
+          },
+          {
+            "label": "Vectors",
+            "value": 79
+          },
+          {
+            "label": "Hybrid + citations",
+            "value": 88
+          }
+        ],
+        "unit": "%"
+      }
+    }
+  },
+  "T-10": {
+    "plan": "Route low-confidence tickets to a human agent with a short context summary, through the ticket API (T-6).",
+    "progress": [
+      {
+        "summary": "A **coding agent** added the hand-off route: tickets below 0.6 confidence go to the customer's helpdesk queue.",
+        "agents_used": [
+          "coding agent"
+        ],
+        "cost_usd": 0.61
+      },
+      {
+        "summary": "A **summary agent** writes a 3-line context note for the human (question, what was tried, best sources).",
+        "agents_used": [
+          "summary agent"
+        ],
+        "cost_usd": 0.49
+      }
+    ],
+    "completion": {
+      "explanation": "Human hand-off works end to end: the answer engine's low-confidence tickets land in the helpdesk with a 3-line summary, so the human doesn't start from zero.\n\nCoding and summary agents; built on the ticket API (T-6).",
+      "agents_used": [
+        "coding agent",
+        "summary agent"
+      ],
+      "cost_usd": 0.26
+    }
+  },
+  "T-11": {
+    "plan": "Stream answers from the ticket API (T-6) into the chat widget (T-7), with sources shown under each answer.",
+    "progress": [
+      {
+        "summary": "A **coding agent** connected the widget to the API with streaming; the first words appear in about 400 ms.",
+        "agents_used": [
+          "coding agent"
+        ],
+        "cost_usd": 0.72
+      },
+      {
+        "summary": "Added source cards under each answer and friendly error states; a **test agent** covered 14 UI scenarios.",
+        "agents_used": [
+          "coding agent",
+          "test agent"
+        ],
+        "cost_usd": 0.63
+      }
+    ],
+    "completion": {
+      "explanation": "The widget now shows live, streamed answers with their sources.\n\n{{artifact}}\n\nConnects the widget (T-7) to the ticket API (T-6). Coding and test agents; 14 UI tests green.",
+      "agents_used": [
+        "coding agent",
+        "test agent"
+      ],
+      "cost_usd": 0.31
+    },
+    "artifact": {
+      "name": "time-to-first-word.svg",
+      "chart": {
+        "title": "Time to first word",
+        "bars": [
+          {
+            "label": "No streaming",
+            "value": 2.8
+          },
+          {
+            "label": "Streaming",
+            "value": 0.4
+          }
+        ],
+        "unit": " s"
+      }
+    }
+  },
+  "T-12": {
+    "plan": "Grade answers automatically against the eval rubric on 200 anonymised real tickets, inside CI (T-8).",
+    "progress": [
+      {
+        "summary": "An **anonymisation agent** removed personal data from 200 real tickets; a **labeling agent** wrote the expected answer and source for each.",
+        "agents_used": [
+          "anonymisation agent",
+          "labeling agent"
+        ],
+        "cost_usd": 0.95
+      },
+      {
+        "summary": "A **coding agent** added the grader to CI (T-8): correct, cited and safe, per the eval rubric.",
+        "agents_used": [
+          "coding agent"
+        ],
+        "cost_usd": 0.58
+      }
+    ],
+    "completion": {
+      "explanation": "Eval harness live: every push is graded on 200 real tickets.\n\n{{artifact}}\n\nFirst baseline on the answer engine: **86% pass**; the biggest failure type is outdated articles. Feeds the tuning in T-14 and the go/no-go (T-13).",
+      "agents_used": [
+        "anonymisation agent",
+        "labeling agent",
+        "coding agent"
+      ],
+      "cost_usd": 0.34
+    },
+    "artifact": {
+      "name": "eval-baseline.svg",
+      "chart": {
+        "title": "Eval baseline: 200 tickets",
+        "bars": [
+          {
+            "label": "Correct",
+            "value": 91
+          },
+          {
+            "label": "Cited",
+            "value": 95
+          },
+          {
+            "label": "Safe",
+            "value": 99
+          },
+          {
+            "label": "All three",
+            "value": 86
+          }
+        ],
+        "unit": "%"
+      }
+    }
+  },
+  "T-13": {
+    "plan": "Load-test the full system and write the go/no-go report for the beta.",
+    "progress": [
+      {
+        "summary": "A **load-test agent** simulated 50 concurrent customers: p95 answer time **2.1 s** (target < 3 s), zero errors.",
+        "agents_used": [
+          "load-test agent"
+        ],
+        "cost_usd": 0.88
+      },
+      {
+        "summary": "A **report agent** combined the eval results (T-12, T-14), load test and hand-off stats into the go/no-go report.",
+        "agents_used": [
+          "report agent"
+        ],
+        "cost_usd": 0.46
+      }
+    ],
+    "completion": {
+      "explanation": "**Recommendation: GO for the beta.**\n\n{{artifact}}\n\n- Accuracy 92% on 200 real tickets (after T-14), p95 2.1 s, 0 errors under load\n- 74% of tickets answered without a human; the rest hand off with context (T-10)\n- Risk: outdated help-center articles. Mitigation: weekly re-index (T-5 pipeline)",
+      "agents_used": [
+        "load-test agent",
+        "report agent"
+      ],
+      "cost_usd": 0.39,
+      "links": [
+        {
+          "label": "Go/no-go report",
+          "url": "https://example.com/lumen/beta-go-no-go"
+        }
+      ]
+    },
+    "artifact": {
+      "name": "beta-readiness.svg",
+      "chart": {
+        "title": "Beta readiness vs targets",
+        "bars": [
+          {
+            "label": "Accuracy %",
+            "value": 92
+          },
+          {
+            "label": "Auto-resolved %",
+            "value": 74
+          },
+          {
+            "label": "p95 (s ×10)",
+            "value": 21
+          }
+        ]
+      }
+    }
+  },
+  "T-14": {
+    "plan": "Use the eval harness (T-12) to improve the answer engine (T-9) before the beta.",
+    "progress": [
+      {
+        "summary": "An **error-analysis agent** grouped the 28 failed tickets: 12 outdated articles, 9 missing sources, 7 multi-part questions.",
+        "agents_used": [
+          "error-analysis agent"
+        ],
+        "cost_usd": 0.67
+      },
+      {
+        "summary": "A **prompt agent** added multi-part handling and a freshness boost for recent articles; a **retrieval agent** re-weighted titles.",
+        "agents_used": [
+          "prompt agent",
+          "retrieval agent"
+        ],
+        "cost_usd": 1.09
+      }
+    ],
+    "completion": {
+      "explanation": "Answer quality up from 86% to **92%** on the 200-ticket eval set.\n\n{{artifact}}\n\nError analysis, prompt and retrieval agents. Fixes: multi-part questions, a freshness boost, title weighting. The numbers feed the go/no-go report (T-13).",
+      "agents_used": [
+        "error-analysis agent",
+        "prompt agent",
+        "retrieval agent"
+      ],
+      "cost_usd": 0.44
+    },
+    "artifact": {
+      "name": "eval-before-after.svg",
+      "chart": {
+        "title": "Eval pass rate: before vs after tuning",
+        "bars": [
+          {
+            "label": "Before",
+            "value": 86
+          },
+          {
+            "label": "After",
+            "value": 92
+          }
+        ],
+        "unit": "%"
+      }
+    }
+  }
+}
