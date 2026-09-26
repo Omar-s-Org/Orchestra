@@ -511,7 +511,7 @@ export function createTask(c: Ctx, t: NewTask) {
     if (!t.title?.trim() || !t.milestoneId) throw new BadRequest("title and milestoneId are required");
     if (!c.db.prepare("SELECT 1 FROM milestones WHERE id=?").get(t.milestoneId)) throw new NotFound(`Milestone ${t.milestoneId} not found`);
     // Every reference must exist, or the task would point at people/tasks/docs nobody can resolve.
-    const missing = (table: string, ids: string[] = []) => ids.filter(x => !c.db.prepare(`SELECT 1 FROM ${table} WHERE id=?`).get(x));
+    const missing = (table: string, ids: string[] | null = []) => (ids ?? []).filter(x => !c.db.prepare(`SELECT 1 FROM ${table} WHERE id=?`).get(x));
     const bad = [
       ...missing("users", [...(t.workers ?? []), ...(t.access ?? [])]).map(x => `unknown person "${x}"`),
       ...missing("tasks", [...(t.dependsOn ?? []), ...(t.parentId ? [t.parentId] : [])]).map(x => `unknown task "${x}"`),

@@ -193,6 +193,7 @@ describe("PM setup", () => {
   it("rejects a task that points at people, tasks or docs that don't exist", () => {
     expect(() => S.createTask(ui("layla"), { milestoneId: "M-2", title: "x", workers: ["ghost"], dependsOn: ["T-999"], docIds: ["K-99"] }))
       .toThrow(/unknown person "ghost"; unknown task "T-999"; unknown doc "K-99"/);
+    expect(S.createTask(ui("layla"), { milestoneId: "M-2", title: "Null lists are empty", docIds: null as unknown as string[] }).docs).toEqual([]);
   });
 
   it("new milestone and doc ids never collide with gaps in existing ids", () => {
