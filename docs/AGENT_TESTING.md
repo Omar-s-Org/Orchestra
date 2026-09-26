@@ -2,6 +2,33 @@
 
 For Hassan (and anyone checking that a *real* agent works our tools the way the simulator does).
 
+## 0. Full stack: backend + frontend together
+The UI Saad built is now in `web/`. Run both, then click through as each role and send Omar feedback (what's broken, confusing or slow, with a screenshot and the role you were logged in as).
+```bash
+npm install && npm run dev          # terminal 1 (repo root): backend on http://localhost:8787
+npm run web:install && npm run web  # terminal 2 (repo root): frontend on http://localhost:8080
+```
+Open http://localhost:8080. The pill in the top bar should say **LIVE**; click an account under "Demo accounts" and sign in.
+- **As the PM (`layla@…`):** Board, Activity, Knowledge, Review, Graph, and Company view (toggle in the top bar).
+- **As a senior (`sara@…` Engineering, `tom@…` Marketing/Growth):** the Review page. Approving takes two clicks: *Approve*, then *Confirm approve*.
+- **As a junior (`john@…`, `priya@…`):** you only see your own and junior coworkers' tasks; Review and Graph aren't in the menu.
+- **Full demo loop:** start a run as the PM (the Run-demo button isn't in the UI yet):
+  ```bash
+  TOKEN=$(curl -s -X POST localhost:8787/api/auth/login -H 'content-type: application/json' \
+    -d '{"email":"layla@northwind.test","password":"demo1234"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
+  curl -X POST localhost:8787/api/demo/run -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"project":"lumen"}'
+  ```
+  Use `layla@lumen.test` if Lumen is already loaded. `POST /api/demo/stop` stops it.
+  - The 4 simulated agents submit wave 1 and it shows up in Review.
+  - Approve it as Sara, and the next wave unlocks.
+  - The login list switches to the `@lumen.test` accounts automatically.
+
+Checked before handing over, headless in Chromium against a local backend:
+- Every page loads for the PM, a senior and a junior with no failed API calls and no page errors.
+- Approving from Review marks the task done.
+- The Company view toggle works.
+- The PM stays logged in across a Run demo, and the login list follows the loaded project.
+
 ## 1. Start a server with the Lumen project
 Test locally: Run demo would start the simulated Hassan too, and he'd take your tasks.
 ```bash

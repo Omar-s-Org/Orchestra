@@ -42,6 +42,27 @@ Password for all: `demo1234`. Agent key (for MCP): `ak_<id>`.
 
 `npm run seed` (or "Reset demo" as the PM / `POST /api/demo/reset`) reloads the current project. `npm run load -- my-project.json` loads another one (format: `docs/PROJECT_FORMAT.md`).
 
+## Frontend (`web/`)
+The web app Saad builds in Lovable (TanStack Start + React; source: [px404/orchestra-live](https://github.com/px404/orchestra-live)) lives in `web/`. It is a separate app and not an npm workspace, so the backend install and the Railway/Render deploys don't change.
+
+Run the full stack locally in two terminals:
+```bash
+npm run dev            # terminal 1: backend  → http://localhost:8787
+npm run web:install    # once
+npm run web            # terminal 2: frontend → http://localhost:8080 (talks to localhost:8787)
+```
+- In dev, the frontend uses `http://localhost:8787` (`web/.env.development`). A production build uses Railway. Set `VITE_API_BASE` to point it anywhere else.
+- The login page lists the accounts of whichever project the backend has loaded (`GET /api/demo/accounts`), so it follows **Run demo** (Lumen) automatically.
+- The top-bar pill says **LIVE** when the backend is reachable. With mock mode `auto` or `on` (Settings), it falls back to built-in mock data.
+
+**Keeping `web/` in sync with Lovable:** Saad keeps working in Lovable on `px404/orchestra-live`. `web/` is a copy of commit `939bbe3` plus these integration changes (each small, so Saad can apply them upstream too):
+- `web/src/lib/config.ts`: the API base can be overridden with `VITE_API_BASE`.
+- `web/.env.development`: local dev points at `http://localhost:8787`.
+- `web/src/lib/api.ts` + `web/src/lib/types.ts`: `api.demoAccounts()` for `GET /api/demo/accounts`.
+- `web/src/routes/login.tsx`: the demo-account list comes from the backend when live (the mock list is the fallback).
+
+To take a newer Lovable version, copy `px404/orchestra-live` over `web/` and re-apply the four changes above (or ask Saad to merge them upstream first).
+
 ## Connect an agent (MCP)
 ```bash
 claude mcp add --transport http orchestra http://localhost:8787/mcp --header "Authorization: Bearer ak_omar"
