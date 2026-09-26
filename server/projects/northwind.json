@@ -91,28 +91,28 @@
     {
       "id": "K-1",
       "title": "Northwind Launch brief",
-      "body": "# Northwind Launch\n\nGoal: ship the smart-home hub MVP by **3 Oct**, onboard 10 beta customers by 17 Oct, public launch 31 Oct.\n\n- Every task is owned by a person working through their AI agent.\n- Agents report progress and cost; seniors approve finished work.",
+      "body": "# Northwind Launch\n\nWe are launching **Northwind Hub**, a smart-home hub that learns your routines and recommends products that fit your home.\n\n## Milestones\n- **3 Oct: MVP ready** (API, recommendations, onboarding UI)\n- **17 Oct: Beta** with 10 customers\n- **31 Oct: Public launch**\n\n## How we work\n- Every task is owned by a person who works through their own AI agent.\n- Agents report progress with an explanation of **how** the work was done, which sub-agents they used, and what it cost.\n- Juniors submit, seniors approve. Nobody approves their own work.\n\n## Success metrics\n- 10 beta customers onboarded\n- Search p95 under 2 s\n- Recommendation precision@10 above 0.35",
       "min_role": "junior",
       "author": "layla"
     },
     {
       "id": "K-2",
       "title": "API design conventions",
-      "body": "# API conventions\n\n- REST, JSON, kebab-case paths\n- Errors: `{ error }` with proper status codes\n- Every endpoint has a test",
+      "body": "# API conventions\n\n- REST + JSON, kebab-case paths, versioned under `/v1`\n- Errors: `{ \"error\": \"message\" }` with a proper status code (400, 401, 403, 404)\n- Auth: `Authorization: Bearer <token>` on every request\n- Pagination: `?page=` and `?limit=` (max 100)\n- Every endpoint has a test; CI must be green before review",
       "min_role": "junior",
       "author": "sara"
     },
     {
       "id": "K-3",
       "title": "Brand voice guide",
-      "body": "# Brand voice\n\nWarm, confident, no jargon. Lead with the benefit, then the feature.",
+      "body": "# Brand voice\n\nWarm, confident, no jargon. **Lead with the benefit, then the feature.**\n\n| Say | Don't say |\n|---|---|\n| \"Your home, one tap away\" | \"Unified IoT control plane\" |\n| \"Set up in 5 minutes\" | \"Frictionless onboarding\" |\n| \"Picks products that fit your home\" | \"AI-powered recommendations\" |\n\nShort sentences. Talk to one person (\"you\").",
       "min_role": "junior",
       "author": "tom"
     },
     {
       "id": "K-4",
       "title": "Architecture decision records",
-      "body": "# ADRs\n\n1. SQLite for the pilot, Postgres at launch.\n2. Recommendations run as a nightly batch job.",
+      "body": "# Architecture decision records\n\n1. **SQLite for the pilot, Postgres at launch.** One file is enough for 10 beta customers; we migrate before 31 Oct.\n2. **Recommendations run as a nightly batch job.** Results are stored per product and served by the API.\n3. **Full-text search inside the database** (FTS) instead of a separate search service, until traffic proves otherwise.",
       "min_role": "senior",
       "author": "sara"
     },
@@ -140,13 +140,14 @@
       "docs": [
         "K-1"
       ],
-      "description": "Agree what is in the MVP and how we measure success."
+      "description": "Agree what is in the MVP and how we measure success.",
+      "scope": "In: MVP feature list, success metrics, milestone dates. Out: pricing (T-12)."
     },
     {
       "id": "T-2",
       "title": "Architecture review",
       "milestone": "M-1",
-      "due": "2026-09-30",
+      "due": "2026-09-25",
       "status": "in_progress",
       "departments": [
         "Engineering"
@@ -157,7 +158,8 @@
       "docs": [
         "K-4"
       ],
-      "description": "Review the system design before the beta. Senior-only task."
+      "description": "Review the system design against the ADRs before the beta: service boundaries, data flow and the main scaling risks. Findings go to the PM with a go/no-go for M-1.",
+      "scope": "In: API, recommendation batch job, data pipeline. Out: frontend."
     },
     {
       "id": "T-3",
@@ -174,7 +176,7 @@
       "docs": [
         "K-2"
       ],
-      "description": "Import the product catalog nightly into the API database.",
+      "description": "Import the product catalog nightly into the API database, with validation so bad rows never reach the API.",
       "scope": "In: import + validation. Out: pricing logic."
     },
     {
@@ -195,7 +197,8 @@
       "docs": [
         "K-2"
       ],
-      "description": "REST API for products, search and auth, used by the onboarding UI."
+      "description": "REST API for products, search (T-11) and auth (T-10), used by the onboarding UI (T-6). Recommendations from T-5 are served through it.",
+      "scope": "In: products, search, auth, recommendations endpoint, OpenAPI spec. Out: payments."
     },
     {
       "id": "T-10",
@@ -209,7 +212,9 @@
       "workers": [
         "priya"
       ],
-      "parent": "T-4"
+      "parent": "T-4",
+      "description": "Sign-up, login and token refresh for the product API.",
+      "scope": "In: JWT access + refresh tokens, password reset. Out: social login."
     },
     {
       "id": "T-11",
@@ -223,7 +228,9 @@
       "workers": [
         "priya"
       ],
-      "parent": "T-4"
+      "parent": "T-4",
+      "description": "Full-text product search with filters for category and price, paginated.",
+      "scope": "In: `GET /products/search`, filters, tests. Out: ranking by recommendations."
     },
     {
       "id": "T-5",
@@ -240,7 +247,8 @@
       "depends_on": [
         "T-3"
       ],
-      "description": "First recommendation model. Serve results through the product API (T-4)."
+      "description": "First recommendation model. Serve results through the product API (T-4).",
+      "scope": "In: offline training, evaluation (precision@10), a recommendations endpoint in T-4. Out: real-time retraining."
     },
     {
       "id": "T-6",
@@ -257,13 +265,14 @@
       "depends_on": [
         "T-4"
       ],
-      "description": "Sign-up and device pairing screens."
+      "description": "Sign-up and device pairing screens for beta customers, built on the product API (T-4). Shows the first recommendations after pairing.",
+      "scope": "In: sign-up, login, pair a hub, home screen with recommendations. Out: settings, billing."
     },
     {
       "id": "T-7",
       "title": "Integration tests & CI",
       "milestone": "M-1",
-      "due": "2026-09-24",
+      "due": "2026-10-02",
       "status": "todo",
       "departments": [
         "Engineering"
@@ -274,7 +283,8 @@
       "depends_on": [
         "T-4"
       ],
-      "description": "End-to-end tests for the product API and a CI pipeline."
+      "description": "End-to-end tests for the product API (T-4) and a CI pipeline that runs them on every push, so the beta never ships a broken endpoint.",
+      "scope": "In: API tests (auth, products, search, recommendations), CI workflow, test report. Out: load tests (T-14)."
     },
     {
       "id": "T-8",
@@ -291,7 +301,8 @@
       "docs": [
         "K-3"
       ],
-      "description": "Landing page for beta sign-ups, in the brand voice."
+      "description": "Landing page for beta sign-ups, in the brand voice.",
+      "scope": "In: headline, 3 benefit blocks, sign-up form copy, A/B test of 2 headlines. Out: design."
     },
     {
       "id": "T-9",
@@ -313,7 +324,8 @@
       "depends_on": [
         "T-5"
       ],
-      "description": "Guide + email sequence for beta customers, including how recommendations work."
+      "description": "Guide + email sequence for beta customers, including how recommendations work.",
+      "scope": "In: setup guide, 3 welcome emails, FAQ. Out: video tutorials."
     },
     {
       "id": "T-12",
@@ -330,7 +342,8 @@
       "access": [
         "layla"
       ],
-      "description": "Competitor pricing and willingness-to-pay. Senior-only task."
+      "description": "Competitor pricing and willingness-to-pay research, as input for the launch price decision.",
+      "scope": "In: 6 competitors, price tiers, a survey of 200 waitlist sign-ups. Out: final price (PM decision)."
     },
     {
       "id": "T-13",
@@ -347,7 +360,9 @@
       "depends_on": [
         "T-8",
         "T-9"
-      ]
+      ],
+      "description": "Launch announcement, press kit and journalist outreach for the public launch, built on the winning landing page copy (T-8) and the onboarding kit (T-9).",
+      "scope": "In: announcement, fact sheet, product images, outreach list. Out: paid ads."
     },
     {
       "id": "T-14",
@@ -363,7 +378,9 @@
       ],
       "depends_on": [
         "T-7"
-      ]
+      ],
+      "description": "Load test the product API (T-4) before the public launch: find the breaking point and make sure search and recommendations stay fast under launch traffic.",
+      "scope": "In: load scripts for 1,000 concurrent users, p95 latency report, fixes for the top bottleneck. Out: frontend performance."
     }
   ],
   "history": [
