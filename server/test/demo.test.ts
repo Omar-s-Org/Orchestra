@@ -62,4 +62,14 @@ describe("Run demo button", () => {
     const s = await json(await fetch(`${base}/api/demo/stop`, { method: "POST", headers: auth }));
     expect(s).toMatchObject({ running: false, end_reason: "stopped" });
   });
+
+  it("Reset demo also stops a running demo", async () => {
+    const db = openDb(":memory:"); reset(db);
+    const base = await start(db);
+    const pm = (await json(await fetch(`${base}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "layla@northwind.test", password: "demo1234" }) }))).token;
+    const auth = { Authorization: `Bearer ${pm}`, "Content-Type": "application/json" };
+    await fetch(`${base}/api/demo/run`, { method: "POST", headers: auth, body: JSON.stringify({ project: "lumen", speed: 1 }) });
+    expect((await fetch(`${base}/api/demo/reset`, { method: "POST", headers: auth })).status).toBe(200);
+    expect(await json(await fetch(`${base}/api/demo/status`, { headers: auth }))).toMatchObject({ running: false, end_reason: "stopped" });
+  });
 });

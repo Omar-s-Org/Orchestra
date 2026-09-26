@@ -189,4 +189,16 @@ describe("PM setup", () => {
     expect(t.depends_on.map(d => d.id)).toEqual(["T-8"]);
     expect(() => S.createTask(ui("sara"), { milestoneId: "M-1", title: "x" })).toThrow(/Only the PM/);
   });
+
+  it("rejects a task that points at people, tasks or docs that don't exist", () => {
+    expect(() => S.createTask(ui("layla"), { milestoneId: "M-2", title: "x", workers: ["ghost"], dependsOn: ["T-999"], docIds: ["K-99"] }))
+      .toThrow(/unknown person "ghost"; unknown task "T-999"; unknown doc "K-99"/);
+  });
+
+  it("new milestone and doc ids never collide with gaps in existing ids", () => {
+    db.prepare("UPDATE milestones SET id='M-7' WHERE id='M-1'").run();   // ids M-7, M-2, M-3 → a count-based id would be M-4, max-based M-8
+    db.prepare("UPDATE kb_docs SET id='K-9' WHERE id='K-1'").run();
+    expect(S.createMilestone(ui("layla"), { name: "Later" }).id).toBe("M-8");
+    expect(S.createDoc(ui("layla"), { title: "Note", body: "Body" }).id).toBe("K-10");
+  });
 });

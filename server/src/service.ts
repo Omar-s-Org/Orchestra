@@ -468,12 +468,18 @@ export function reopenTask(c: Ctx, id: string, note: string) {
 // ---------- PM setup ----------
 function requirePm(c: Ctx) { if (c.user.role !== "pm") throw new Forbidden("Only the PM can do this"); }
 
+/** Next free id like M-4 / K-6: one past the highest number used, so ids from a project file never collide. */
+function nextId(db: DB, table: "milestones" | "kb_docs", prefix: string) {
+  const ids = (db.prepare(`SELECT id FROM ${table}`).all() as { id: string }[]).map(r => r.id);
+  const max = Math.max(0, ...ids.filter(id => id.startsWith(prefix)).map(id => Number(id.slice(prefix.length)) || 0));
+  return `${prefix}${max + 1}`;
+}
+
 export function createMilestone(c: Ctx, m: { name: string; due?: string }) {
   return guarded(c, "create_milestone", null, () => {
     requirePm(c);
     if (!m.name?.trim()) throw new BadRequest("name is required");
-    const n = (c.db.prepare("SELECT COUNT(*) AS n FROM milestones").get() as { n: number }).n + 1;
-    const id = `M-${n}`;
+    const id = nextId(c.db, "milestones", "M-");
     const p = c.db.prepare("SELECT id FROM projects LIMIT 1").get() as { id: string };
     c.db.prepare("INSERT INTO milestones (id, project_id, name, due) VALUES (?,?,?,?)").run(id, p.id, m.name, m.due ?? null);
     return { id, name: m.name, due: m.due ?? null };
@@ -504,6 +510,14 @@ export function createTask(c: Ctx, t: NewTask) {
     requirePm(c);
     if (!t.title?.trim() || !t.milestoneId) throw new BadRequest("title and milestoneId are required");
     if (!c.db.prepare("SELECT 1 FROM milestones WHERE id=?").get(t.milestoneId)) throw new NotFound(`Milestone ${t.milestoneId} not found`);
+    // Every reference must exist, or the task would point at people/tasks/docs nobody can resolve.
+    const missing = (table: string, ids: string[] = []) => ids.filter(x => !c.db.prepare(`SELECT 1 FROM ${table} WHERE id=?`).get(x));
+    const bad = [
+      ...missing("users", [...(t.workers ?? []), ...(t.access ?? [])]).map(x => `unknown person "${x}"`),
+      ...missing("tasks", [...(t.dependsOn ?? []), ...(t.parentId ? [t.parentId] : [])]).map(x => `unknown task "${x}"`),
+      ...missing("kb_docs", t.docIds).map(x => `unknown doc "${x}"`),
+    ];
+    if (bad.length) throw new BadRequest(bad.join("; "));
     const id = c.db.transaction(() => insertTask(c.db, { ...t, id: undefined, status: "todo" }, c.user.id))();
     return getTask(c, id);
   });
@@ -513,8 +527,7 @@ export function createDoc(c: Ctx, d: { title: string; body: string; minRole?: Ro
   return guarded(c, "create_doc", null, () => {
     requirePm(c);
     if (!d.title?.trim() || !d.body?.trim()) throw new BadRequest("title and body are required");
-    const n = (c.db.prepare("SELECT COUNT(*) AS n FROM kb_docs").get() as { n: number }).n + 1;
-    const id = `K-${n}`;
+    const id = nextId(c.db, "kb_docs", "K-");
     const p = c.db.prepare("SELECT id FROM projects LIMIT 1").get() as { id: string };
     c.db.prepare("INSERT INTO kb_docs (id,project_id,title,body,min_role,author_id,created_at) VALUES (?,?,?,?,?,?,?)").run(id, p.id, d.title, d.body, d.minRole ?? "junior", c.user.id, now());
     return readKb(c, id);
