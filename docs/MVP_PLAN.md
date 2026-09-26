@@ -1,5 +1,7 @@
 # Orchestra MVP pivot — plan
 
+> **Design rationale (why/what).** Current API shapes: `docs/LOVABLE_PLAN.md`. Data format: `docs/PROJECT_FORMAT.md`. Hosting: `docs/DEPLOY.md`.
+
 ## Context
 The team (Omar, Hassan, Saad + Hazem) agreed a simpler MVP for HACK_002 (submit 08:00 Sun). Core idea: **project management where every person works through an AI agent (MCP), and the UI zooms in by credential.** Saad builds the UI in Lovable against our API; we own backend + MCP. Current backend (branch `claude/brave-archimedes-lbi3ef`, 23 tests) has the right skeleton (Express + SQLite + MCP + audited service layer) but the wrong domain model (4 roles, per-task "scope grants", messages). We reshape it to the agreed model.
 
@@ -99,10 +101,10 @@ audit(... unchanged, keeps allowed=0 refusals)
 ## MCP tools (`server/src/mcp.ts`, keep stateless Streamable HTTP + bearer auth)
 `whoami`, `list_my_tasks`, `get_task`, `start_task(task_id, plan)`, `report_progress(task_id, summary, agents_used[], cost_usd, links[])`, `attach_artifact(task_id, name, mime, base64) → {id, url}`, `submit_task(task_id, explanation, agents_used[], cost_usd, links[])`, `search_kb(query)`, `read_kb(doc_id)`, `team_board()` (what the caller may see). Optional header `X-Agent-Name` labels the agent in the live view. Every call updates `agent_sessions.last_seen`.
 
-## Seed (`server/src/seed.ts`)
+## Seed: now `server/projects/northwind.json` (format in `docs/PROJECT_FORMAT.md`)
 Tasks include `depends_on` chains and cross-mentions so the graph shows real structure on first load. Project "Northwind Launch" (fictional). PM: Layla. Seniors: Sara (Engineering), Tom (Marketing). Juniors: John, Priya (Eng); Omar, Hassan (Eng, real Claude Code); Mia (Marketing). 3 milestones, ~10 tasks spread across depts incl. one senior task hidden from juniors, 5 KB docs incl. PM-only budget. Password `demo1234`; agent keys `ak_<id>`.
 
-## Simulated agents (`server/sim/run.ts`, `npm run sim`)
+## Simulated agents (Hassan; `server/sim/`, `npm run sim -w server`)
 Uses `@modelcontextprotocol/sdk` client against `/mcp` with John/Priya/Mia tokens + `X-Agent-Name`. Loop per persona: pick todo task → `start_task` → 2–3 `report_progress` (explanation, agents used, cost) with 3–6 s delays → `attach_artifact` (generated SVG chart) → `submit_task`. One persona attempts a forbidden action (read PM-only doc / approve own task) to show refusal.
 
 ## Split of work (from ~19:30)

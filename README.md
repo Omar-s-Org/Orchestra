@@ -2,16 +2,24 @@
 
 Project management where every team member works through their own AI agent. Agents report progress over **MCP**; the web app shows the project live, filtered by role: **PM** (whole project + relational graph) › **Senior** (their department, reviews, cost) › **Junior** (own + coworkers' tasks). Open source (MIT); anything that speaks REST, MCP or webhooks can plug in.
 
-## Docs (source of truth)
-- [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md): the plan for everyone: model, permissions, backend, MCP tools, split of work
-- [`docs/LOVABLE_PLAN.md`](docs/LOVABLE_PLAN.md): frontend spec + **API contract** (the backend must match it exactly)
-- [`docs/PROJECT_FORMAT.md`](docs/PROJECT_FORMAT.md): define a project (people, milestones, tasks with due dates, history) as JSON
-- [`docs/Orchestra_Tracker.xlsx`](docs/Orchestra_Tracker.xlsx): who does what, and status
+## Where is the truth
+| Topic | Source |
+|---|---|
+| API shapes + frontend behaviour | [`docs/LOVABLE_PLAN.md`](docs/LOVABLE_PLAN.md) |
+| Project / demo data format | [`docs/PROJECT_FORMAT.md`](docs/PROJECT_FORMAT.md) |
+| MCP tools + agent rules | [Connect an agent](#connect-an-agent-mcp) below |
+| Hosting | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
+| Why / what (product, permissions) | [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) |
+| Who does what | [`docs/Orchestra_Tracker.xlsx`](docs/Orchestra_Tracker.xlsx) |
+
+## Hosted
+Backend + DB on Railway (see `docs/DEPLOY.md`): `https://<orchestra-api>.up.railway.app` (API under `/api`, agents under `/mcp`). Frontend on Lovable.
 
 ## Run
 ```bash
 npm install
-npm run dev     # API http://localhost:8787/api · MCP http://localhost:8787/mcp
+npm run dev     # local: API http://localhost:8787/api · MCP http://localhost:8787/mcp
+npm start       # production-style (what Railway runs)
 npm test
 ```
 
@@ -25,7 +33,7 @@ Password for all: `demo1234`. Agent key (for MCP): `ak_<id>`.
 | john@ · priya@ · omar@ · hassan@northwind.test | Junior | Engineering |
 | mia@northwind.test | Junior | Marketing |
 
-`npm run seed` (or "Reset demo" / `POST /api/demo/reset`) reloads the current project. `npm run load -- my-project.json` loads another one (format: `docs/PROJECT_FORMAT.md`).
+`npm run seed` (or "Reset demo" as the PM / `POST /api/demo/reset`) reloads the current project. `npm run load -- my-project.json` loads another one (format: `docs/PROJECT_FORMAT.md`).
 
 ## Connect an agent (MCP)
 ```bash

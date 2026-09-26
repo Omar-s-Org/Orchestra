@@ -85,6 +85,15 @@ describe("REST + MCP end to end", () => {
     expect(r.status).toBe(403);
   });
 
+  it("demo reset needs a logged-in PM", async () => {
+    expect((await fetch(`${base}/api/demo/reset`, { method: "POST" })).status).toBe(401);
+    const john = await login("john@northwind.test");
+    expect((await fetch(`${base}/api/demo/reset`, { method: "POST", headers: { Authorization: `Bearer ${john}` } })).status).toBe(403);
+    const pm = await login("layla@northwind.test");
+    const r = await fetch(`${base}/api/demo/reset`, { method: "POST", headers: { Authorization: `Bearer ${pm}` } });
+    expect(await r.json()).toEqual({ ok: true });
+  });
+
   it("MCP rejects an unknown agent key", async () => {
     await expect(agent("nope", "x")).rejects.toThrow();
   });

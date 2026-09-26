@@ -4,6 +4,7 @@ import type { DB } from "./db.js";
 import * as S from "./service.js";
 import { reset } from "./seed.js";
 import { mountMcp } from "./mcp.js";
+import { Forbidden } from "./permissions.js";
 
 type AuthedReq = Request & { ctx: S.Ctx; token: string };
 
@@ -30,7 +31,6 @@ export function createApp(db: DB) {
 
   app.get("/api/health", (_req, res) => { res.json({ ok: true }); });
   app.post("/api/auth/login", (req, res) => send(res, () => S.login(db, req.body?.email, req.body?.password)));
-  app.post("/api/demo/reset", (_req, res) => send(res, () => { reset(db); return { ok: true }; }));
 
   mountMcp(app, db);
 
@@ -78,6 +78,12 @@ export function createApp(db: DB) {
   r.post("/kb", h((c, req) => S.createDoc(c, req.body ?? {})));
   r.post("/webhooks", h((c, req) => S.addWebhook(c, req.body ?? {})));
   r.get("/audit", h(c => S.auditLog(c)));
+  // Wipes all data, so it needs the PM (the URL may be public when hosted).
+  r.post("/demo/reset", h(c => {
+    if (c.user.role !== "pm") throw new Forbidden("Only the PM can reset the demo");
+    reset(db);
+    return { ok: true };
+  }));
   app.use("/api", r);
   return app;
 }

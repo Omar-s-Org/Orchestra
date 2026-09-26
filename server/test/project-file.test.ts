@@ -68,6 +68,17 @@ describe("project files", () => {
     expect(() => validateProject(bad)).toThrow(/role "pm"/);
   });
 
+  it("AGENT_KEYS=random issues unguessable keys", () => {
+    process.env.AGENT_KEYS = "random";
+    try {
+      const db = openDb(":memory:");
+      loadProject(db, mini());
+      expect(S.userByAgentKey(db, "ak_dev")).toBeUndefined();
+      const { agent_key } = db.prepare("SELECT agent_key FROM users WHERE id='dev'").get() as { agent_key: string };
+      expect(agent_key).toMatch(/^ak_[0-9a-f]{48}$/);
+    } finally { delete process.env.AGENT_KEYS; }
+  });
+
   it("reset reloads the last loaded project file", () => {
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orch-")), "tiny.json");
     fs.writeFileSync(file, JSON.stringify(mini()));

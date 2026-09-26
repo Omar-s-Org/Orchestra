@@ -78,6 +78,9 @@ export function validateProject(raw: unknown): ProjectFile {
   return p;
 }
 
+/** Predictable ak_<id> keys keep local dev and simulators simple; AGENT_KEYS=random issues unguessable keys instead. */
+const defaultAgentKey = (id: string) => (process.env.AGENT_KEYS === "random" ? undefined : `ak_${id}`);
+
 const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
 
 /** Replace everything in the database with the given project. */
@@ -87,7 +90,7 @@ export function loadProject(db: DB, raw: unknown, sourcePath?: string) {
   db.transaction(() => {
     for (const t of TABLES) db.exec(`DELETE FROM ${t}`);
     for (const u of p.people) createUserRow(db, { id: u.id, name: u.name, email: u.email ?? `${u.id}@example.test`, password: u.password ?? "demo1234",
-      title: u.title, department: u.department, role: u.role, agentKey: u.agent_key ?? `ak_${u.id}` });
+      title: u.title, department: u.department, role: u.role, agentKey: u.agent_key ?? defaultAgentKey(u.id) });
     db.prepare("INSERT INTO projects VALUES (?,?,?)").run(p.project.id, p.project.name, p.project.description);
     for (const m of p.milestones) db.prepare("INSERT INTO milestones VALUES (?,?,?,?)").run(m.id, p.project.id, m.name, m.due ?? null);
     const pm = p.people.find(x => x.role === "pm")!.id;
