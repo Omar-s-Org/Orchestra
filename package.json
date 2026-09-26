@@ -9,7 +9,8 @@
     "start": "npm run start -w server",
     "test": "npm test -w server",
     "seed": "npm run seed -w server",
-    "load": "npm run load -w server --"
+    "load": "npm run load -w server --",
+    "sim": "npm run sim -w server --"
   },
   "engines": {
     "node": ">=22"

@@ -8,7 +8,8 @@
     "seed": "tsx src/seed-cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "load": "tsx src/seed-cli.ts"
+    "load": "tsx src/seed-cli.ts",
+    "sim": "tsx sim/run.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.1",
