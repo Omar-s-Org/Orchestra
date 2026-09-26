@@ -18,7 +18,8 @@ export type Story = {
   completion: { explanation: string; agents_used?: string[]; cost_usd?: number; links?: Link[] }; // "{{artifact}}" embeds the chart
 };
 type Person = ProjectFile["people"][number];
-type TaskInfo = { id: string; title: string; status: string; parent_id: string | null; locked?: boolean; blocked_by?: { id: string; status: string }[]; description?: string; docs?: { id: string; readable: boolean }[] };
+type TaskInfo = { id: string; title: string; status: string; parent?: string; locked?: boolean; blocked_by?: string[] };
+type Brief = { id: string; title: string; status: string; docs?: { id: string; truncated?: boolean }[] };
 
 export type SimOptions = {
   baseUrl: string;             // e.g. http://localhost:8787 or the Railway URL
@@ -50,7 +51,7 @@ export function loadStories(projectFile: string): Record<string, Story> {
 }
 
 /** Used for tasks without a written story, so the simulator works with any project file. */
-export function genericStory(t: TaskInfo): Story {
+export function genericStory(t: { id: string; title: string }): Story {
   return {
     plan: `Picking up "${t.title}": reading the task and its linked docs, then working through it with sub-agents.`,
     progress: [
@@ -90,7 +91,7 @@ async function agentKey(baseUrl: string, p: Person) {
 
 /** Subtasks before their parents, then work already in progress, then new work. */
 const workOrder = (a: TaskInfo, b: TaskInfo) =>
-  Number(!a.parent_id) - Number(!b.parent_id) || Number(a.status !== "in_progress") - Number(b.status !== "in_progress");
+  Number(!a.parent) - Number(!b.parent) || Number(a.status !== "in_progress") - Number(b.status !== "in_progress");
 
 type AgentOptions = { baseUrl: string; speed: number; log: (line: string) => void; loop: boolean; heartbeatMs: number; signal?: AbortSignal };
 
@@ -114,11 +115,11 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
   // Each wait is logged once; in --loop mode the agent picks the task up as soon as it unlocks.
   const announced = new Set<string>();
   const openTasks = async () => {
-    const open = (await call<TaskInfo[]>("list_my_tasks"))
+    const open = (await call<TaskInfo[]>("team_board", { mine: true }))
       .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"));
     for (const t of open.filter(t => t.locked && !announced.has(t.id))) {
       announced.add(t.id);
-      log(`${t.id} waiting: locked until ${t.blocked_by!.map(b => `${b.id} (${b.status})`).join(", ")} is done`);
+      log(`${t.id} waiting: locked until ${(t.blocked_by ?? []).join(", ")} is done`);
     }
     return open.filter(t => !t.locked).sort(workOrder);
   };
@@ -128,11 +129,12 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
     for (const { id } of queue) {
       if (o.signal?.aborted) break;
       try {
-        const task = await call<TaskInfo>("get_task", { task_id: id });
+        // One read gives the whole brief (docs inline); read_kb only for a doc too long to inline.
+        const { task } = await call<{ task: Brief }>("next_task", { task_id: id });
         if (task.status !== "todo" && task.status !== "in_progress") continue;
         const story = stories[id] ?? genericStory(task);
-        const doc = task.docs?.find(d => d.readable);
-        if (doc) await call("read_kb", { doc_id: doc.id });
+        const long = task.docs?.find(d => d.truncated);
+        if (long) await call("read_kb", { doc_id: long.id });
 
         await call("start_task", { task_id: id, plan: story.plan });
         log(`${id} started: ${task.title}`);

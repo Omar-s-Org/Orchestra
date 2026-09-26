@@ -54,27 +54,28 @@ describe("REST + MCP end to end", () => {
     const priya = await agent("ak_priya", "Priya's Claude");
     const locked = await (await agent("ak_omar", "probe")).callTool({ name: "start_task", arguments: { task_id: "T-6", plan: "x" } });
     expect(locked.isError).toBe(true);
-    expect(text(locked)).toMatch(/locked until its prerequisites are done: T-4/);
+    expect(text(locked)).toMatch(/^Locked \(409\): T-6 is locked until its prerequisites are done: T-4/);
     await priya.callTool({ name: "submit_task", arguments: { task_id: "T-4", explanation: "Product API complete with search and recommendations." } });
     await priya.close();
     const saraTok = await login("sara@northwind.test");
     await fetch(`${base}/api/tasks/T-4/approve`, { method: "POST", headers: { Authorization: `Bearer ${saraTok}` } });
 
     const a = await agent("ak_omar", "Omar's Claude Code");
-    // Every agent is told the workflow on connect (and again by whoami).
-    expect(a.getInstructions()).toMatch(/Call next_task first/);
-    expect(JSON.parse(text(await a.callTool({ name: "whoami", arguments: {} }))).how_to_work).toMatch(/submit_task/);
+    // Every agent is told the workflow once, on connect.
+    expect(a.getInstructions()).toMatch(/1\) next_task/);
     const next = JSON.parse(text(await a.callTool({ name: "next_task", arguments: {} })));
-    expect(next.next.id).toBe("T-6");
+    expect(next.you).toMatch(/^Omar/);
+    expect(next.task.id).toBe("T-6");
     const tools = (await a.listTools()).tools.map(t => t.name);
     expect(tools).toEqual(expect.arrayContaining(["start_task", "report_progress", "attach_artifact", "submit_task", "search_kb"]));
     await a.callTool({ name: "start_task", arguments: { task_id: "T-6", plan: "Build the sign-up screen" } });
     const png = Buffer.from("89504e470d0a1a0a", "hex").toString("base64");
     const art = JSON.parse(text(await a.callTool({ name: "attach_artifact", arguments: { task_id: "T-6", name: "mock.png", mime: "image/png", base64: png } })));
     const sub = await a.callTool({ name: "submit_task", arguments: { task_id: "T-6", explanation: `Built the screens with a UI agent. ${art.markdown}`, agents_used: ["ui agent"], cost_usd: 0.3 } });
-    expect(JSON.parse(text(sub)).status).toBe("review");
+    expect(JSON.parse(text(sub))).toMatchObject({ ok: true, id: "T-6", status: "review" });
     const refused = await a.callTool({ name: "read_kb", arguments: { doc_id: "K-5" } });
     expect(refused.isError).toBe(true);
+    expect(text(refused)).toMatch(/^Forbidden \(403\): /);
     await a.close();
 
     const sara = await login("sara@northwind.test");

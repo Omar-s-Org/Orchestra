@@ -18,10 +18,7 @@ const LUMEN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../pro
 
 /** Priya's agent does T-5 (ingestion) the way AGENT_INSTRUCTIONS tell it to. */
 export const FLOW: [tool: string, args: Record<string, unknown>][] = [
-  ["whoami", {}],
-  ["next_task", {}],
-  ["get_task", { task_id: "T-5" }],
-  ["read_kb", { doc_id: "K-1" }],
+  ["next_task", {}],                                   // brief: task, prerequisites, docs inline
   ["start_task", { task_id: "T-5", plan: "Build the ingestion pipeline for the help-centre articles." }],
   ["report_progress", { task_id: "T-5", summary: "A crawler agent fetched 412 help-centre articles; a chunking agent split them into 3,180 passages. Feeds T-9.", agents_used: ["crawler agent", "chunking agent"], cost_usd: 0.8 }],
   ["report_progress", { task_id: "T-5", summary: "An embedding agent indexed every passage; spot checks on 20 queries pass.", agents_used: ["embedding agent"], cost_usd: 1.1 }],
@@ -29,7 +26,12 @@ export const FLOW: [tool: string, args: Record<string, unknown>][] = [
   ["submit_task", { task_id: "T-5", explanation: "Ingestion pipeline done: 412 articles, 3,180 passages indexed and spot-checked; ready for the answer engine (T-9).", agents_used: ["crawler agent", "chunking agent", "embedding agent"], cost_usd: 0.3 }],
 ];
 
-export type Budget = { definitions: number; instructions: number; tools: number; calls: { tool: string; tokens: number }[]; results: number };
+/**
+ * definitions = what the model sees of each tool (name, description, input schema), which clients send
+ * with every request. wire = the full tools/list JSON, including SDK metadata ($schema, annotations,
+ * execution) that clients use themselves.
+ */
+export type Budget = { definitions: number; wire: number; instructions: number; tools: number; calls: { tool: string; tokens: number }[]; results: number };
 
 export async function measureBudget(flow = FLOW, agentKey = "ak_priya"): Promise<Budget> {
   const db = openDb(":memory:");
@@ -50,7 +52,8 @@ export async function measureBudget(flow = FLOW, agentKey = "ak_priya"): Promise
       calls.push({ tool, tokens: tokens(text) });
     }
     return {
-      definitions: tokens(JSON.stringify(tools)), instructions: tokens(AGENT_INSTRUCTIONS), tools: tools.length,
+      definitions: tokens(JSON.stringify(tools.map(({ name, description, inputSchema: { $schema: _s, ...schema } }) => ({ name, description, input_schema: schema })))),
+      wire: tokens(JSON.stringify(tools)), instructions: tokens(AGENT_INSTRUCTIONS), tools: tools.length,
       calls, results: calls.reduce((s, c) => s + c.tokens, 0),
     };
   } finally {
@@ -61,7 +64,7 @@ export async function measureBudget(flow = FLOW, agentKey = "ak_priya"): Promise
 
 export function formatBudget(b: Budget) {
   return [
-    `Tool definitions: ~${b.definitions} tokens (${b.tools} tools) · instructions: ~${b.instructions} tokens`,
+    `Tool definitions: ~${b.definitions} tokens seen by the model (${b.tools} tools; ~${b.wire} on the wire) · instructions: ~${b.instructions} tokens`,
     ...b.calls.map((c, i) => `  ${String(i + 1).padStart(2)}. ${c.tool.padEnd(16)} ~${c.tokens}`),
     `Results for one task: ~${b.results} tokens in ${b.calls.length} calls`,
     `In context after the task: ~${b.definitions + b.instructions + b.results} tokens`,
