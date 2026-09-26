@@ -46,6 +46,8 @@ type TaskSummary = {
   departments: string[];         // ["Engineering","Marketing"]
   workers: UserRef[];            // people who work on it
   access: UserRef[];             // people who can view it
+  due: string | null;            // "2026-10-02" (YYYY-MM-DD) or null
+  overdue: boolean;              // past due and not done → show a red "Overdue" badge
   live: Live;
   cost_usd: number;              // total reported by agents so far
   updated_at: string;            // ISO
@@ -115,6 +117,7 @@ type TaskDetail = TaskSummary & {
 {
   milestones: { id: string; name: string; due: string; total: number; done: number; pct: number }[];
   by_status: { todo: number; in_progress: number; review: number; done: number };
+  overdue: number;                                   // visible tasks past due and not done
   review_queue: ReviewItem[];                        // tasks in review I can approve (empty for juniors)
   cost: null | {                                     // null when capabilities.cost is false
     total_usd: number;
@@ -139,13 +142,13 @@ Centred card with the Orchestra logo, email and password fields, and a "Sign in"
 See section 6.
 
 ### 5.4 Board (everyone)
-- Header: status count chips (from `by_status`). If `capabilities.cost` is true, add **cost tiles**: total cost, plus a mini bar list of cost by department (PM) or by person (senior).
+- Header: status count chips (from `by_status`), plus a red **Overdue** chip when `overview.overdue > 0`. If `capabilities.cost` is true, add **cost tiles**: total cost, plus a mini bar list of cost by department (PM) or by person (senior).
 - Filter chips: department, person, "Mine". These are **server-side** filters: pass them as `department`, `person` and `mine` query params, and sync them to the URL (section 10).
-- **Kanban**, 4 columns: To do · In progress · Review · Done. Each card shows the id, title, milestone name, department tags, worker avatars, and cost. If `live` is set, add a pulsing border and "🤖 {agent_name}: {activity}". Subtasks appear indented under their parent with a small "↳".
+- **Kanban**, 4 columns: To do · In progress · Review · Done. Each card shows the id, title, milestone name, department tags, worker avatars, cost, and the **due date** ("Due 2 Oct"; red with an "Overdue" badge when `overdue`). If `live` is set, add a pulsing border and "🤖 {agent_name}: {activity}". Subtasks appear indented under their parent with a small "↳".
 - Clicking a card opens the **task drawer**.
 
 ### 5.5 Task drawer (everyone; right side sheet, about 560px wide)
-1. Id, title, status pill, milestone, department tags.
+1. Id, title, status pill, milestone, due date (red if overdue), department tags.
 2. **People:** Workers (avatars and names) and Access (smaller avatars).
 3. **Live banner** when `live` is set: pulsing dot, "{agent_name} is working: {activity}".
 4. Tabs:
@@ -177,6 +180,8 @@ A list of `review_queue` items (`ReviewItem`, section 4; no extra fetches). Each
     type: "project" | "milestone" | "task" | "person";
     label: string;
     status?: Status;            // tasks
+    due?: string | null;        // tasks
+    overdue?: boolean;          // tasks: draw a red outline
     department?: string;        // tasks, persons
     role?: Role;                // persons
     live?: boolean;             // task being worked on / person's agent active

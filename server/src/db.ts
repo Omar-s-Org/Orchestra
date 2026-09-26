@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY, project_id TEXT NOT NULL, milestone_id TEXT NOT NULL, parent_id TEXT,
   title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', scope TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo','in_progress','review','done')),
-  created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  due TEXT, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS task_departments (task_id TEXT NOT NULL, department TEXT NOT NULL, PRIMARY KEY (task_id, department));
 CREATE TABLE IF NOT EXISTS task_people (
   task_id TEXT NOT NULL, user_id TEXT NOT NULL, relation TEXT NOT NULL CHECK (relation IN ('worker','access')),
@@ -44,12 +44,13 @@ CREATE TABLE IF NOT EXISTS agent_sessions (
   user_id TEXT PRIMARY KEY, agent_name TEXT NOT NULL, task_id TEXT, activity TEXT NOT NULL DEFAULT '',
   started_at TEXT NOT NULL, last_seen TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS webhooks (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, events TEXT NOT NULL, created_by TEXT);
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor_id TEXT NOT NULL, via TEXT NOT NULL,
   action TEXT NOT NULL, entity_id TEXT, allowed INTEGER NOT NULL, detail TEXT);
 `;
 
-export const TABLES = ["audit", "webhooks", "agent_sessions", "artifacts", "task_updates", "task_docs", "kb_docs", "task_links",
+export const TABLES = ["meta", "audit", "webhooks", "agent_sessions", "artifacts", "task_updates", "task_docs", "kb_docs", "task_links",
   "task_people", "task_departments", "tasks", "milestones", "projects", "auth_sessions", "users"];
 
 export function openDb(file = process.env.DATABASE_PATH ?? "./data/orchestra.sqlite"): DB {
@@ -60,6 +61,9 @@ export function openDb(file = process.env.DATABASE_PATH ?? "./data/orchestra.sql
   const v0 = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='project_members'").get();
   if (v0) for (const t of [...TABLES, "project_members", "workstreams", "task_scope", "documents", "comments", "messages"]) db.exec(`DROP TABLE IF EXISTS ${t}`);
   db.exec(SCHEMA);
+  // Additive migrations for databases created by an earlier v1 build.
+  const cols = (db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]).map(c => c.name);
+  if (!cols.includes("due")) db.exec("ALTER TABLE tasks ADD COLUMN due TEXT");
   return db;
 }
 
