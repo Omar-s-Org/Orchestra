@@ -44,6 +44,30 @@ export const createUserRow = (db: DB, u: { id: string; name: string; email: stri
 type TaskRow = { id: string; project_id: string; milestone_id: string; parent_id: string | null; title: string; description: string; scope: string; status: Status; due: string | null; created_at: string; updated_at: string };
 type UpdateRow = { id: number; task_id: string; user_id: string; via: Via; agent_name: string | null; kind: string; status_from: Status | null; status_to: Status | null; summary: string; agents_used: string; cost_usd: number; links: string; created_at: string };
 
+/**
+ * Everything a task summary needs besides the permission index, read in a handful of queries per request.
+ * Summaries used to query milestone, cost, live agent and prerequisite titles per task (N+1).
+ */
+type Lookup = {
+  ref: ReturnType<typeof userRefs>;
+  milestone: Map<string, { id: string; name: string }>;
+  cost: Map<string, number>;
+  live: Map<string, { agent_name: string; activity: string; since: string }>;
+  brief: Map<string, { id: string; title: string; status: Status }>;
+};
+function lookup(db: DB): Lookup {
+  const live = new Map<string, { agent_name: string; activity: string; since: string }>();
+  for (const s of db.prepare("SELECT task_id, agent_name, activity, started_at, last_seen FROM agent_sessions WHERE task_id IS NOT NULL").all() as { task_id: string; agent_name: string; activity: string; started_at: string; last_seen: string }[])
+    if (!live.has(s.task_id) && Date.now() - Date.parse(s.last_seen) < LIVE_MS) live.set(s.task_id, { agent_name: s.agent_name, activity: s.activity, since: s.started_at });
+  return {
+    ref: userRefs(db),
+    milestone: new Map((db.prepare("SELECT id, name FROM milestones").all() as { id: string; name: string }[]).map(m => [m.id, m])),
+    cost: new Map((db.prepare("SELECT task_id, SUM(cost_usd) AS s FROM task_updates GROUP BY task_id").all() as { task_id: string; s: number }[]).map(r => [r.task_id, r.s])),
+    live,
+    brief: new Map((db.prepare("SELECT id, title, status FROM tasks").all() as { id: string; title: string; status: Status }[]).map(t => [t.id, t])),
+  };
+}
+
 function userRefs(db: DB) {
   const m = new Map((db.prepare("SELECT id, name, role, department FROM users").all() as User[]).map(u => [u.id, u]));
   return (id: string) => { const u = m.get(id); return u ? { id: u.id, name: u.name, role: u.role, department: u.department } : { id, name: id, role: "junior" as Role, department: "" }; };
@@ -67,18 +91,11 @@ function visibleTask(c: Ctx, ix: Index, id: string) {
   return t;
 }
 
-function liveFor(db: DB, taskId: string) {
-  const s = db.prepare("SELECT agent_name, activity, started_at, last_seen FROM agent_sessions WHERE task_id=?").all(taskId) as { agent_name: string; activity: string; started_at: string; last_seen: string }[];
-  const active = s.find(x => Date.now() - Date.parse(x.last_seen) < LIVE_MS);
-  return active ? { agent_name: active.agent_name, activity: active.activity, since: active.started_at } : null;
-}
-
-function makeSummary(c: Ctx, ix: Index, t: TaskRow, ref = userRefs(c.db)) {
-  const ms = c.db.prepare("SELECT id, name FROM milestones WHERE id=?").get(t.milestone_id) as { id: string; name: string } | undefined;
-  const cost = (c.db.prepare("SELECT COALESCE(SUM(cost_usd),0) AS s FROM task_updates WHERE task_id=?").get(t.id) as { s: number }).s;
+function makeSummary(c: Ctx, ix: Index, t: TaskRow, L: Lookup) {
+  const ref = L.ref;
   return {
     id: t.id, title: t.title, status: t.status,
-    milestone: ms ?? { id: t.milestone_id, name: t.milestone_id },
+    milestone: L.milestone.get(t.milestone_id) ?? { id: t.milestone_id, name: t.milestone_id },
     parent_id: t.parent_id,
     departments: ix.departments.get(t.id) ?? [],
     workers: (ix.workers.get(t.id) ?? []).map(ref),
@@ -86,9 +103,9 @@ function makeSummary(c: Ctx, ix: Index, t: TaskRow, ref = userRefs(c.db)) {
     due: t.due,
     overdue: isOverdue(t.due, t.status),
     sequence: ix.order.sequence.get(t.id) ?? null,
-    ...lockInfo(c.db, ix, t),
-    live: liveFor(c.db, t.id),
-    cost_usd: round(cost),
+    ...lockInfo(ix, t, L),
+    live: L.live.get(t.id) ?? null,
+    cost_usd: round(L.cost.get(t.id) ?? 0),
     updated_at: t.updated_at,
     allowed_actions: allowedActions(ix, c.user, t.id, t.status),
   };
@@ -96,23 +113,17 @@ function makeSummary(c: Ctx, ix: Index, t: TaskRow, ref = userRefs(c.db)) {
 const round = (n: number) => Math.round(n * 100) / 100;
 
 /** locked = a prerequisite isn't done yet. blocked_by lists those prerequisites (titles only if visible). */
-function lockInfo(db: DB, ix: Index, t: TaskRow) {
+function lockInfo(ix: Index, t: TaskRow, L: Lookup) {
   const open = t.status === "done" ? [] : ix.order.blockedBy(t.id);
-  return {
-    locked: open.length > 0,
-    blocked_by: open.map(id => {
-      const d = taskRow(db, id)!;
-      return { id: d.id, title: d.title, status: d.status };
-    }),
-  };
+  return { locked: open.length > 0, blocked_by: open.map(id => L.brief.get(id)!) };
 }
 /** A task is overdue once its due date (end of that day, UTC) has passed and it isn't done. */
 export const isOverdue = (due: string | null, status: Status) => !!due && status !== "done" && Date.parse(`${due.slice(0, 10)}T23:59:59Z`) < Date.now();
 
-function presentUpdate(db: DB, u: UpdateRow, ref = userRefs(db)) {
-  const t = db.prepare("SELECT id, title FROM tasks WHERE id=?").get(u.task_id) as { id: string; title: string };
+function presentUpdate(u: UpdateRow, L: Lookup) {
+  const t = L.brief.get(u.task_id);
   return {
-    id: u.id, task: t, kind: u.kind, via: u.via, user: ref(u.user_id), agent_name: u.agent_name,
+    id: u.id, task: { id: u.task_id, title: t?.title ?? u.task_id }, kind: u.kind, via: u.via, user: L.ref(u.user_id), agent_name: u.agent_name,
     summary: u.summary, agents_used: JSON.parse(u.agents_used), cost_usd: round(u.cost_usd), links: JSON.parse(u.links),
     status_from: u.status_from, status_to: u.status_to, created_at: u.created_at,
   };
@@ -137,7 +148,7 @@ export function agentKey(c: Ctx, baseUrl: string) {
 
 export function listTasks(c: Ctx, f: { status?: string; department?: string; person?: string; mine?: boolean } = {}) {
   const ix = loadIndex(c.db);
-  const ref = userRefs(c.db);
+  const L = lookup(c.db);
   const people = (id: string) => [...(ix.workers.get(id) ?? []), ...(ix.access.get(id) ?? [])];
   const seq = (id: string) => ix.order.sequence.get(id) ?? Infinity;
   return (c.db.prepare("SELECT * FROM tasks").all() as TaskRow[])
@@ -147,45 +158,48 @@ export function listTasks(c: Ctx, f: { status?: string; department?: string; per
     .filter(t => !f.department || (ix.departments.get(t.id) ?? []).includes(f.department))
     .filter(t => !f.person || people(t.id).includes(f.person))
     .filter(t => !f.mine || people(t.id).includes(c.user.id))
-    .map(t => makeSummary(c, ix, t, ref));
+    .map(t => makeSummary(c, ix, t, L));
 }
 
-function linkedTasks(c: Ctx, ix: Index, sql: string, ...args: string[]) {
+function linkedTasks(c: Ctx, ix: Index, L: Lookup, sql: string, ...args: string[]) {
   const ids = [...new Set((c.db.prepare(sql).all(...args) as { id: string }[]).map(r => r.id))];
-  return ids.filter(id => canSeeTask(ix, c.user, id)).map(id => {
-    const t = taskRow(c.db, id)!;
-    return { id: t.id, title: t.title, status: t.status };
-  });
+  return ids.filter(id => L.brief.has(id) && canSeeTask(ix, c.user, id)).map(id => L.brief.get(id)!);
 }
 
 export function getTask(c: Ctx, id: string) {
   const ix = loadIndex(c.db);
   const t = visibleTask(c, ix, id);
-  const ref = userRefs(c.db);
+  const L = lookup(c.db);
   return {
-    ...makeSummary(c, ix, t, ref),
+    ...makeSummary(c, ix, t, L),
     description: t.description, scope: t.scope,
     docs: (c.db.prepare("SELECT d.id, d.title, d.min_role FROM task_docs td JOIN kb_docs d ON d.id=td.doc_id WHERE td.task_id=?").all(id) as { id: string; title: string; min_role: Role }[])
       .map(d => ({ id: d.id, title: d.title, readable: canReadDoc(c.user, d.min_role) })),
-    depends_on: linkedTasks(c, ix, "SELECT to_task AS id FROM task_links WHERE from_task=? AND type='depends_on'", id),
-    blocks: linkedTasks(c, ix, "SELECT from_task AS id FROM task_links WHERE to_task=? AND type='depends_on'", id),
-    mentions: linkedTasks(c, ix, "SELECT to_task AS id FROM task_links WHERE from_task=? AND type='mentions' UNION SELECT from_task FROM task_links WHERE to_task=? AND type='mentions'", id, id),
-    subtasks: (c.db.prepare("SELECT * FROM tasks WHERE parent_id=? ORDER BY id").all(id) as TaskRow[]).filter(s => canSeeTask(ix, c.user, s.id)).map(s => makeSummary(c, ix, s, ref)),
-    updates: (c.db.prepare("SELECT * FROM task_updates WHERE task_id=? ORDER BY id DESC").all(id) as UpdateRow[]).map(u => presentUpdate(c.db, u, ref)),
-    artifacts: artifactsOf(c.db, id, ref),
+    depends_on: linkedTasks(c, ix, L, "SELECT to_task AS id FROM task_links WHERE from_task=? AND type='depends_on'", id),
+    blocks: linkedTasks(c, ix, L, "SELECT from_task AS id FROM task_links WHERE to_task=? AND type='depends_on'", id),
+    mentions: linkedTasks(c, ix, L, "SELECT to_task AS id FROM task_links WHERE from_task=? AND type='mentions' UNION SELECT from_task FROM task_links WHERE to_task=? AND type='mentions'", id, id),
+    subtasks: (c.db.prepare("SELECT * FROM tasks WHERE parent_id=? ORDER BY id").all(id) as TaskRow[]).filter(s => canSeeTask(ix, c.user, s.id)).map(s => makeSummary(c, ix, s, L)),
+    updates: (c.db.prepare("SELECT * FROM task_updates WHERE task_id=? ORDER BY id DESC").all(id) as UpdateRow[]).map(u => presentUpdate(u, L)),
+    artifacts: artifactsOf(c.db, id, L.ref),
   };
 }
 
 export function activity(c: Ctx, f: { limit?: number; task?: string; via?: string; kind?: string } = {}) {
   const ix = loadIndex(c.db);
-  const ref = userRefs(c.db);
+  const L = lookup(c.db);
   const limit = Math.min(Math.max(Number(f.limit) || 50, 1), 200);
   const where: string[] = []; const args: string[] = [];
   if (f.task) { where.push("task_id=?"); args.push(f.task); }
   if (f.via) { where.push("via=?"); args.push(f.via); }
   if (f.kind) { where.push("kind=?"); args.push(f.kind); }
-  const rows = c.db.prepare(`SELECT * FROM task_updates ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY id DESC`).all(...args) as UpdateRow[];
-  return rows.filter(u => canSeeTask(ix, c.user, u.task_id)).slice(0, limit).map(u => presentUpdate(c.db, u, ref));
+  // Stream newest-first and stop at the limit instead of loading the whole history on every poll.
+  const out: ReturnType<typeof presentUpdate>[] = [];
+  for (const u of c.db.prepare(`SELECT * FROM task_updates ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY id DESC`).iterate(...args) as IterableIterator<UpdateRow>) {
+    if (!canSeeTask(ix, c.user, u.task_id)) continue;
+    out.push(presentUpdate(u, L));
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 /** People whose agents the caller may see: themselves, same-department people at or below their level; PM sees all. */
@@ -202,23 +216,25 @@ export function liveAgents(c: Ctx) {
   });
 }
 
-function reviewItem(c: Ctx, ix: Index, t: TaskRow, ref: ReturnType<typeof userRefs>) {
+function reviewItem(c: Ctx, ix: Index, t: TaskRow, L: Lookup) {
   const last = c.db.prepare("SELECT * FROM task_updates WHERE task_id=? AND kind='completion' ORDER BY id DESC LIMIT 1").get(t.id) as UpdateRow | undefined;
-  return { ...makeSummary(c, ix, t, ref), latest_completion: last ? presentUpdate(c.db, last, ref) : null, artifacts: artifactsOf(c.db, t.id, ref) };
+  return { ...makeSummary(c, ix, t, L), latest_completion: last ? presentUpdate(last, L) : null, artifacts: artifactsOf(c.db, t.id, L.ref) };
 }
 
 export function overview(c: Ctx) {
   const ix = loadIndex(c.db);
-  const ref = userRefs(c.db);
+  const L = lookup(c.db);
+  const ref = L.ref;
   const tasks = (c.db.prepare("SELECT * FROM tasks").all() as TaskRow[]).filter(t => canSeeTask(ix, c.user, t.id));
   const by_status = { todo: 0, in_progress: 0, review: 0, done: 0 };
-  tasks.forEach(t => by_status[t.status]++);
+  const byMilestone = new Map<string, TaskRow[]>();
+  for (const t of tasks) { by_status[t.status]++; byMilestone.set(t.milestone_id, [...(byMilestone.get(t.milestone_id) ?? []), t]); }
   const milestones = (c.db.prepare("SELECT id, name, due FROM milestones ORDER BY due").all() as { id: string; name: string; due: string }[]).map(m => {
-    const ts = tasks.filter(t => t.milestone_id === m.id);
+    const ts = byMilestone.get(m.id) ?? [];
     const done = ts.filter(t => t.status === "done").length;
     return { ...m, total: ts.length, done, pct: ts.length ? Math.round((done / ts.length) * 100) : 0 };
   });
-  const review_queue = tasks.filter(t => t.status === "review" && canApprove(ix, c.user, t.id)).map(t => reviewItem(c, ix, t, ref));
+  const review_queue = tasks.filter(t => t.status === "review" && canApprove(ix, c.user, t.id)).map(t => reviewItem(c, ix, t, L));
   let cost = null;
   if (capabilities(c.user).cost) {
     const ids = new Set(tasks.map(t => t.id));
@@ -229,7 +245,9 @@ export function overview(c: Ctx) {
       byDept.set(d, (byDept.get(d) ?? 0) + u.cost_usd);
       byPerson.set(u.user_id, (byPerson.get(u.user_id) ?? 0) + u.cost_usd);
     }
-    const doneBy = (uid: string) => tasks.filter(t => t.status === "done" && (ix.workers.get(t.id) ?? []).includes(uid)).length;
+    const doneCount = new Map<string, number>();
+    for (const t of tasks) if (t.status === "done") for (const w of ix.workers.get(t.id) ?? []) doneCount.set(w, (doneCount.get(w) ?? 0) + 1);
+    const doneBy = (uid: string) => doneCount.get(uid) ?? 0;
     cost = {
       total_usd: round(ups.reduce((s, u) => s + u.cost_usd, 0)),
       by_department: [...byDept].map(([department, v]) => ({ department, cost_usd: round(v) })).sort((a, b) => b.cost_usd - a.cost_usd),
@@ -269,7 +287,8 @@ export function getArtifact(c: Ctx, id: string) {
 export function graph(c: Ctx) {
   if (c.user.role !== "pm") throw new Forbidden("The project graph is available to the PM only");
   const ix = loadIndex(c.db);
-  const ref = userRefs(c.db);
+  const L = lookup(c.db);
+  const ref = L.ref;
   const project = c.db.prepare("SELECT id, name FROM projects LIMIT 1").get() as { id: string; name: string };
   const tasks = c.db.prepare("SELECT * FROM tasks").all() as TaskRow[];
   const liveUsers = new Set((c.db.prepare("SELECT user_id, last_seen FROM agent_sessions").all() as { user_id: string; last_seen: string }[])
@@ -282,7 +301,7 @@ export function graph(c: Ctx) {
   }
   const people = new Set<string>();
   for (const t of tasks) {
-    nodes.push({ id: `task:${t.id}`, type: "task", label: `${t.id} ${t.title}`, status: t.status, due: t.due, overdue: isOverdue(t.due, t.status), locked: t.status !== "done" && ix.order.blockedBy(t.id).length > 0, sequence: ix.order.sequence.get(t.id) ?? null, department: (ix.departments.get(t.id) ?? [])[0] ?? null, live: !!liveFor(c.db, t.id), parent_id: t.parent_id ? `task:${t.parent_id}` : null });
+    nodes.push({ id: `task:${t.id}`, type: "task", label: `${t.id} ${t.title}`, status: t.status, due: t.due, overdue: isOverdue(t.due, t.status), locked: t.status !== "done" && ix.order.blockedBy(t.id).length > 0, sequence: ix.order.sequence.get(t.id) ?? null, department: (ix.departments.get(t.id) ?? [])[0] ?? null, live: L.live.has(t.id), parent_id: t.parent_id ? `task:${t.parent_id}` : null });
     edges.push(t.parent_id ? { source: `task:${t.parent_id}`, target: `task:${t.id}`, type: "subtask" } : { source: `milestone:${t.milestone_id}`, target: `task:${t.id}`, type: "contains" });
     for (const w of ix.workers.get(t.id) ?? []) { people.add(w); edges.push({ source: `person:${w}`, target: `task:${t.id}`, type: "works_on" }); }
   }

@@ -19,9 +19,10 @@ type Run = {
 };
 let current: Run | null = null;
 
-/** Demo projects = project files that have simulator stories. */
+/** Demo projects = project files that have simulator stories. Read once: the files ship with the server. */
+let projectsCache: string[] | null = null;
 export function demoProjects() {
-  return fs.readdirSync(PROJECTS_DIR).filter(f => f.endsWith(".json")).map(f => f.replace(/\.json$/, ""))
+  return projectsCache ??= fs.readdirSync(PROJECTS_DIR).filter(f => f.endsWith(".json")).map(f => f.replace(/\.json$/, ""))
     .filter(name => Object.keys(loadStories(path.join(PROJECTS_DIR, `${name}.json`))).length > 0).sort();
 }
 
