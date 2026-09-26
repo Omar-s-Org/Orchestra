@@ -14,6 +14,7 @@
     "load": "npm run load -w server --",
     "sim": "npm run sim -w server --",
     "check": "npm run check -w server --",
+    "smoke": "npm run smoke -w server --",
     "demo": "npm run sim -w server -- --url https://orchestra-api-production-f275.up.railway.app --reset --loop",
     "demo:backup": "npm run sim -w server -- --url https://orchestra-api-rt0g.onrender.com --reset --loop",
     "demo:local": "npm run sim -w server -- --reset --loop"

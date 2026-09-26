@@ -75,6 +75,20 @@ export function startDemo(db: DB, selfUrl: string, opts: { project?: string; spe
   return demoStatus(db);
 }
 
+/** Project files that can be loaded (Northwind, Lumen, …); test fixtures are left out. */
+export function loadableProjects() {
+  return fs.readdirSync(PROJECTS_DIR).filter(f => f.endsWith(".json") && !f.includes("test")).map(f => f.replace(/\.json$/, "")).sort();
+}
+
+/** Stop any running demo and load a project (fresh data, no agents). PM only (checked by the route). */
+export function loadDemo(db: DB, project: string) {
+  if (!/^[a-z0-9-]+$/.test(project) || !loadableProjects().includes(project))
+    throw new BadRequest(`Unknown project "${project}". Available: ${loadableProjects().join(", ")}`);
+  stopDemo(db);
+  const loaded = reset(db, path.join(PROJECTS_DIR, `${project}.json`));
+  return { loaded, ...demoStatus(db) };
+}
+
 export function stopDemo(db: DB) {
   if (current && !current.finishedAt) finish("stopped");
   return demoStatus(db);

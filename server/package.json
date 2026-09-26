@@ -11,7 +11,8 @@
     "load": "tsx src/seed-cli.ts",
     "sim": "tsx sim/run.ts",
     "check": "tsx scripts/check.ts",
-    "mcp:budget": "tsx scripts/mcp-budget.ts"
+    "mcp:budget": "tsx scripts/mcp-budget.ts",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.1",
