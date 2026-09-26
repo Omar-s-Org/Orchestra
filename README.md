@@ -2,6 +2,19 @@
 
 Project management where every team member works through their own AI agent. Agents report progress over **MCP**; the web app shows the project live, filtered by role: **PM** (whole project + relational graph) › **Senior** (their department, reviews, cost) › **Junior** (own + coworkers' tasks). Open source (MIT); anything that speaks REST, MCP or webhooks can plug in.
 
+## Pitch
+**The problem.** Teams already hand real work to AI agents: code, research, copy, charts. But project tools still expect a person to open a ticket and type a status update. What the agent did, how it did it and what it cost stays in a chat window nobody else sees. Managers can't see who is working on what, and there's no clear point where a human signs off on an agent's work.
+
+**Orchestra.** Every person connects their own agent (Claude Code or any MCP client) with a personal key. The agent picks up its next unlocked task, starts it, and reports progress as it goes: what it did, which agents it used, what it cost and links to the results. It can attach files such as charts or images, then submits the work for review. The board updates live. Nobody types a status update.
+
+**Why it's different**
+- **One app for every role.** The PM sees the whole project as a live graph of tasks, dependencies and who is working together. A senior sees their department, the review queue and the costs. A junior sees their own tasks and their coworkers'. A single rule on the server decides who sees what, so the same screens work for everyone.
+- **A human approves the work.** Agents can start, report and submit, but only a senior or the PM can approve, and nobody approves their own work. A task stays locked until everything it depends on has been approved, so approving one piece of work visibly unlocks the next.
+- **You can see how the work was done.** Each update records how the work was done, which agents helped and what it cost, so cost adds up per person and per department with no budgeting tool.
+- **Open.** MIT licensed, with a documented REST API, an MCP server and outbound webhooks. It works with whatever agent or tool a team already uses.
+
+**The demo.** Simulated agents (John, Priya, Mia) are real MCP clients working a real project next to a live Claude Code agent. Priya's agent submits T-4, Sara approves it in the UI, and T-6/T-7 unlock and get picked up while the PM watches the graph change.
+
 ## Where is the truth
 | Topic | Source |
 |---|---|
@@ -87,7 +100,34 @@ Each agent picks its open tasks, starts them, reports 2–3 progress updates (ex
 **Hosted runs:** the sim reads the project file on your machine, so it must be the same file the server loaded (`PROJECT_FILE` on Railway/Render; Northwind by default). For another project pass `--project server/projects/<file>.json`.
 
 ## Integrations
-Open source (MIT) with an **open plug**: the documented REST API, the MCP server (any MCP-capable agent), and outbound webhooks (`POST /api/webhooks {url, events?}` as PM) for `task.status_changed`, `task.progress`, `task.submitted`, `task.approved`. No specific tool is built in; anything can subscribe later.
+Open source (MIT) with an **open plug**: nothing is tied to one vendor, and there are three ways in.
+
+| Way in | Who uses it | What it gives you |
+|---|---|---|
+| **MCP** (`/mcp`) | AI agents: Claude Code, or any MCP-capable client | Work tasks, report progress, attach files, submit for review ([tools](#connect-an-agent-mcp)) |
+| **REST** (`/api`) | Web UIs, scripts, dashboards | Everything the UI uses: tasks, graph, activity, live agents, cost, KB. Shapes are in `docs/LOVABLE_PLAN.md` §4 |
+| **Webhooks** | Chat bots, CRMs, CI, analytics | The server POSTs JSON to your URL when something happens |
+
+**Webhooks.** Register one as the PM:
+```bash
+curl -X POST https://orchestra-api-production-f275.up.railway.app/api/webhooks \
+  -H "Authorization: Bearer <PM session token>" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/hook","events":["task.submitted","task.approved"]}'
+```
+Leave out `events` to get all of them. Each call is a `POST` with this body:
+```json
+{ "event": "task.submitted", "at": "2026-09-27T01:23:45.000Z", "data": { "task_id": "T-4", "by": "priya", "summary": "…" } }
+```
+| Event | When | `data` |
+|---|---|---|
+| `task.status_changed` | task started, or reopened by a reviewer | `task_id, from, to, by` |
+| `task.progress` | an agent reports progress | `task_id, by, summary, cost_usd` |
+| `task.submitted` | an agent submits for review | `task_id, by, summary` |
+| `task.approved` | a senior/PM approves | `task_id, by` |
+
+Delivery is fire-and-forget with a 5 s timeout. A slow or broken receiver never holds up an agent.
+
+**Examples of what can plug in:** post to a Slack channel when work is ready for review, sync approved tasks to a CRM or issue tracker, kick off a CI deploy when a task is approved, or send agent costs to a finance sheet. None of these are built in. That's deliberate: the plug is the product, and teams connect what they already use.
 
 ## Layout
 ```
