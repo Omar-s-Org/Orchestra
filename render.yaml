@@ -1,0 +1,17 @@
+# Render blueprint: standby backend (primary is Railway, see docs/DEPLOY.md).
+# Free plan: no persistent disk, so the demo project re-seeds on each restart, and the
+# service sleeps after ~15 min idle. For always-on + persistence use plan: starter and a disk.
+services:
+  - type: web
+    name: orchestra-api
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_PATH
+        value: ./data/orchestra.sqlite
