@@ -84,7 +84,7 @@ Tools are shaped to save the agent tokens: writes return a short acknowledgement
 
 Errors start with their type: `Locked (409)` (prerequisites not approved yet), `Forbidden (403)`, `NotFound (404)`, `BadRequest (400)`. Testing with real agents: [docs/AGENT_TESTING.md](docs/AGENT_TESTING.md).
 
-Rules the server enforces: a task is **locked** until all its prerequisites (`depends_on`) are **done** (approved), so it can't be started, reported on or submitted before then; tasks come in a suggested order (`sequence`: prerequisites first, then due date), but any unlocked task may be done first; only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat (agent shows "active" for 60 s).
+Rules the server enforces: a task is **locked** until all its prerequisites (`depends_on`) are **done** (approved), so it can't be started, reported on or submitted before then; tasks come in a suggested order (`sequence`: prerequisites first, then due date), but any unlocked task may be done first; only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat: an agent shows "active" for 60 s after a call, or for up to 15 min while it has a started task, so agents never need to call just to look alive.
 
 ## Demo in one command
 ```bash
