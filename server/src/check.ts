@@ -62,6 +62,7 @@ export async function runChecks(baseUrl: string, accounts: Accounts = DEFAULT_AC
   const mine = await expect("tasks?mine=true (junior)", "/api/tasks?mine=true", C.TaskSummary.array(), junior);
   await expect("tasks?status=todo", "/api/tasks?status=todo", C.TaskSummary.array(), pm);
   await expect("tasks?department=Engineering", "/api/tasks?department=Engineering", C.TaskSummary.array(), pm);
+
   const jrAll = await expect("tasks (junior)", "/api/tasks", C.TaskSummary.array(), junior);
   if (all) {
     const seq = all.map(t => t.sequence ?? Infinity);
@@ -72,6 +73,14 @@ export async function runChecks(baseUrl: string, accounts: Accounts = DEFAULT_AC
     // Only meaningful if the junior's own list loaded; otherwise every task would look hidden.
     const hidden = jrAll ? all.find(t => !jrAll.some(j => j.id === t.id)) : undefined;
     if (hidden) await expectStatus(`task hidden from junior → 404 (${hidden.id})`, `/api/tasks/${hidden.id}`, 404, junior);
+  }
+  // Company view (LOVABLE_PLAN §11): one person's in-progress work, using someone who has some.
+  const busy = all?.find(t => t.status === "in_progress" && t.workers.length)?.workers[0];
+  if (busy) {
+    const q = `/api/tasks?person=${encodeURIComponent(busy.id)}&status=in_progress`;
+    const byPerson = await expect(`tasks?person=${busy.id}&status=in_progress (company view)`, q, C.TaskSummary.array(), pm);
+    if (byPerson) record("person filter returns only that person's in-progress tasks",
+      byPerson.length > 0 && byPerson.every(t => t.status === "in_progress" && [...t.workers, ...t.access].some(u => u.id === busy.id)));
   }
   if (mine && jrAll) record("junior: mine ⊆ visible", mine.every(m => jrAll.some(j => j.id === m.id)));
   if (jrAll) record("junior: no approve/reopen buttons", jrAll.every(t => t.allowed_actions.length === 0));
