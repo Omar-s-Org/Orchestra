@@ -27,6 +27,7 @@ npm install
 npm run dev     # local: API http://localhost:8787/api · MCP http://localhost:8787/mcp
 npm start       # production-style (what Railway runs)
 npm test
+npm run check -- --url https://<host>   # contract check: every API response vs docs/LOVABLE_PLAN.md §4, per role (GETs + logins only)
 ```
 
 ## Demo accounts

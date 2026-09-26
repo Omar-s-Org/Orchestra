@@ -24,7 +24,7 @@ The app is **read-mostly**. Agents do the work and the UI shows it. The only hum
 
 ## 3. Roles and navigation (one app, not one app per role)
 There is **one** layout for everyone. What changes per role comes only from the API:
-- **Nav items:** `Graph` (only if `me.capabilities.graph`), `Board`, `Activity`, `Knowledge`, `Review` (only if `me.capabilities.review`).
+- **Nav items:** `Graph` (only if `me.capabilities.graph`), `Board`, `Activity`, `Knowledge`, `Review` (only if `me.capabilities.review`), and `Company` (only if `me.capabilities.graph` **and** the Company view toggle is on; see section 11).
 - **Cost tiles** are shown only if `me.capabilities.cost`.
 - **Landing page:** Graph if `capabilities.graph`, otherwise Board.
 - Role labels: `pm` → "Project Manager", `senior` → "Senior", `junior` → "Junior", shown as a coloured badge (PM violet, Senior blue, Junior slate).
@@ -278,6 +278,7 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 - [ ] A 401 logs out once and returns to the same page after logging in again.
 - [ ] A hard refresh of `/board?task=T-4` (logged in, LIVE) reopens the drawer with live data, and the browser's network tab shows the request going to the hosted API.
 - [ ] Only the PM sees "Reset demo".
+- [ ] Company view (section 11): only the PM sees the toggle. With it on, `/company` shows every task as a coloured tile. Clicking a tile shows its subtasks and people; clicking a person shows their spend and in-progress tasks. No agent summaries are shown anywhere in this view.
 - [ ] Locked tasks show 🔒 + "Waiting on …". After a senior approves the blocking task, the lock disappears within 2 s.
 
 ## 10. App architecture and UI defaults (fixed decisions; don't guess)
@@ -291,6 +292,7 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 | `/activity` | Activity | auth |
 | `/knowledge`, `/knowledge/:id` | Knowledge list / reader | auth |
 | `/review` | Review | auth + `capabilities.review`, else redirect `/board` |
+| `/company` | Company view (section 11) | auth + `capabilities.graph` + toggle on, else redirect `/board` |
 | `/` | redirect to landing (section 3) | auth |
 
 - Implementation with TanStack Router:
@@ -330,3 +332,52 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
   - Live agents: "No agents active right now."
   - Knowledge: "No documents found."
 - **Loading:** skeletons on first load only; after that, keep the previous data while polling.
+
+## 11. Company view (for startups): PM only, behind a toggle
+**Purpose:** a startup founder or owner sees the **whole company's progress at a glance**: every task, its state, who's on it and what it costs. It's a **progress tracker, not surveillance**. It never shows agent summaries, timelines or anything a person's agent wrote; only status, people, dates and cost.
+
+**Toggle:** a switch in the top bar, shown **only when `me.capabilities.graph`** (the PM): **"Company view · for startups"** with an ⓘ tooltip carrying the explanation below. Store it in `localStorage.companyView` (default **off**). On → adds the `Company` nav item and opens `/company`; off → back to the landing page.
+
+**Explanation text** (under the page title and in the tooltip):
+> *For startups: see the whole company's progress at a glance. Every task, who's on it and what it costs. Progress only: no prompts or agent reports.*
+
+**Data: existing endpoints only (no new API):**
+| Need | Call |
+|---|---|
+| All tasks (PM sees everything) | `GET /api/tasks` |
+| KPIs + spend per person | `GET /api/overview` → `by_status`, `overdue`, `milestones`, `cost.total_usd`, `cost.by_person[] {user, cost_usd, tasks_done}` |
+| Task panel: subtasks + people | `GET /api/tasks/:id` → use **only** `title, status, due, overdue, locked, blocked_by, departments, workers, access, subtasks, depends_on, blocks, sequence`. **Don't render `updates`, `description` or `artifacts` here** |
+| Person panel: their in-progress work | `GET /api/tasks?person=<userId>&status=in_progress` (plus `GET /api/tasks?person=<userId>` for counts per status) |
+Poll every 5 s.
+
+**Layout (dense, built for 50–300 tasks):**
+1. **KPI row:** Tasks · % done · In progress · In review · Overdue · Agent spend (`$`).
+2. **Group-by switch:** Milestone (default) · Department · Person. One row per group: the group name and a thin progress bar, then that group's tasks as a wrap of **small square tiles** (about 36 px, `T-12` inside, title on hover).
+3. **Tile colours** (legend always visible, top-right):
+
+| Status | Colour |
+|---|---|
+| To do | **red** `#ef4444` |
+| In progress | **orange** `#f97316` |
+| In review | **yellow** `#eab308` |
+| Done | **green** `#22c55e` |
+
+   Extra markings:
+   - **locked** tasks get a small 🔒 in the corner and 60% opacity
+   - **overdue** tasks get a 2 px dark ring (`#7f1d1d`)
+   - tasks with a live agent get a soft pulse
+   - subtasks render as half-size tiles right after their parent
+4. **Click a tile → task panel** (right sheet, about 420 px):
+   - title, status pill, due date
+   - departments
+   - **subtasks**, each with its colour dot and its people's avatars
+   - **people** (workers and viewers as avatars), each clickable
+   - "Depends on / Blocks" chips (clicking one opens that task)
+5. **Click a person** (in the task panel, or the person row when grouped by person) → **person panel**:
+   - name, role badge, department
+   - **Spend** `$X.XX` (from `cost.by_person`; $0 if absent)
+   - **Tasks done** (`tasks_done`)
+   - counts per status
+   - the list of their **in-progress tasks** (clickable tiles)
+
+**Mock mode:** derive everything from the same mock tasks, overview and people (like `buildGraph()`); no separate fixtures.

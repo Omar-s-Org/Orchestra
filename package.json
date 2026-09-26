@@ -10,7 +10,8 @@
     "test": "npm test -w server",
     "seed": "npm run seed -w server",
     "load": "npm run load -w server --",
-    "sim": "npm run sim -w server --"
+    "sim": "npm run sim -w server --",
+    "check": "npm run check -w server --"
   },
   "engines": {
     "node": ">=22"

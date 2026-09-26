@@ -26,6 +26,9 @@ New → **Blueprint** → repo `omarjku/Orchestra` → it reads `render.yaml` (w
   claude mcp add --transport http orchestra https://<render-domain>/mcp --header "Authorization: Bearer ak_omar"
   ```
 
+## Verify a deploy
+`npm run check -- --url https://<domain>` runs about 38 read-only checks (all endpoints, every role, the permission rules) against the frontend contract and exits non-zero on any mismatch.
+
 ## Operating
 - Every push to `main` redeploys both.
 - **Reset demo:** log in as the PM → "Reset demo" (`POST /api/demo/reset`).
