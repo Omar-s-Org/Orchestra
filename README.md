@@ -2,6 +2,22 @@
 
 Project management where every team member works through their own AI agent. Agents report progress over **MCP**; the web app shows the project live, filtered by role: **PM** (whole project + relational graph) › **Senior** (their department, reviews, cost) › **Junior** (own + coworkers' tasks). Open source (MIT); anything that speaks REST, MCP or webhooks can plug in.
 
+## Try it (no setup)
+| | URL |
+|---|---|
+| **The app** | https://orchestra-web-production.up.railway.app: pick a demo account on the login page (password `demo1234`) |
+| **Backend status + test controls** | https://orchestra-api-production-f275.up.railway.app: **Load Northwind** · **Run Lumen demo** · **Stop** · **Self-test** |
+| Backup backend (use it for self-tests during a live demo) | https://orchestra-api-rt0g.onrender.com (sleeps when idle; the first load takes ~1 min) |
+
+- **Browse:** Northwind is loaded by default. Log in as `layla@northwind.test` (PM), `sara@…` (senior) or `john@…` (junior).
+- **Live demo:** on the status page, click **Run Lumen demo**. In the app, log in as `layla@lumen.test` or `sara@lumen.test`. Priya, John, Omar and Hassan's agents work through three waves; approve each wave in **Review** and the next one unlocks.
+- **Is it working?** Click **Self-test** on the status page (or run `npm run smoke -- --url <backend>`). In about 10 s it checks:
+  - health and every endpoint the UI uses, per role
+  - that the MCP tools are the v2 set
+  - the whole 4-agent demo with approvals, including that a junior can't approve
+
+  It then loads Northwind again. It **resets the data**, so run it on the backup during a live demo.
+
 ## Where is the truth
 | Topic | Source |
 |---|---|
@@ -17,7 +33,7 @@ Project management where every team member works through their own AI agent. Age
 |---|---|
 | Backend primary (Railway) | `https://orchestra-api-production-f275.up.railway.app`: API `/api`, agents `/mcp` |
 | Backend standby (Render) | `https://orchestra-api-rt0g.onrender.com`: same paths, demo data |
-| Frontend | Lovable |
+| Frontend (Railway, from `web/`) | `https://orchestra-web-production.up.railway.app` |
 
 Setup + failover: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 

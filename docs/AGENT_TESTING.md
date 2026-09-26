@@ -2,32 +2,26 @@
 
 For Hassan (and anyone checking that a *real* agent works our tools the way the simulator does).
 
-## 0. Full stack: backend + frontend together
-The UI Saad built is now in `web/`. Run both, then click through as each role and send Omar feedback (what's broken, confusing or slow, with a screenshot and the role you were logged in as).
-```bash
-npm install && npm run dev          # terminal 1 (repo root): backend on http://localhost:8787
-npm run web:install && npm run web  # terminal 2 (repo root): frontend on http://localhost:8080
-```
-Open http://localhost:8080. The pill in the top bar should say **LIVE**; click an account under "Demo accounts" and sign in.
-- **As the PM (`layla@…`):** Board, Activity, Knowledge, Review, Graph, and Company view (toggle in the top bar).
-- **As a senior (`sara@…` Engineering, `tom@…` Marketing/Growth):** the Review page. Approving takes two clicks: *Approve*, then *Confirm approve*.
-- **As a junior (`john@…`, `priya@…`):** you only see your own and junior coworkers' tasks; Review and Graph aren't in the menu.
-- **Full demo loop:** start a run as the PM (the Run-demo button isn't in the UI yet):
-  ```bash
-  TOKEN=$(curl -s -X POST localhost:8787/api/auth/login -H 'content-type: application/json' \
-    -d '{"email":"layla@northwind.test","password":"demo1234"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
-  curl -X POST localhost:8787/api/demo/run -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"project":"lumen"}'
-  ```
-  Use `layla@lumen.test` if Lumen is already loaded. `POST /api/demo/stop` stops it.
-  - The 4 simulated agents submit wave 1 and it shows up in Review.
-  - Approve it as Sara, and the next wave unlocks.
-  - The login list switches to the `@lumen.test` accounts automatically.
+## 0. Test the hosted app (no setup)
+1. Open the **status page**: https://orchestra-api-production-f275.up.railway.app. Click **Self-test** first; every line should be ✓.
+   - If one isn't, send Omar a screenshot of the page.
+   - It resets the data and loads Northwind again at the end.
+2. Open **the app**: https://orchestra-web-production.up.railway.app. The pill in the top bar should say **LIVE**. Pick an account on the login page (password `demo1234`).
+   - **PM (`layla@…`):** Board, Activity, Knowledge, Review, Graph, and Company view (the toggle in the top bar).
+   - **Senior (`sara@…` Engineering, `tom@…` Marketing/Growth):** Review. Approving takes two clicks: *Approve*, then *Confirm approve*.
+   - **Junior (`john@…`, `priya@…`):** only your own and junior coworkers' tasks. Review and Graph aren't in the menu.
+3. **The live demo:** on the status page, click **Run Lumen demo**.
+   - In the app, log in as `sara@lumen.test`.
+   - The 4 simulated agents (Priya, John, Omar, you) submit wave 1, and it shows up in **Review**. Approve it, and the next wave unlocks. After 3 waves the status page says "complete".
+   - **Stop** ends it; **Load Northwind** brings back the static demo.
+4. Send Omar feedback on anything broken, confusing or slow: a screenshot, the URL, and the account you used.
 
-Checked before handing over, headless in Chromium against a local backend:
-- Every page loads for the PM, a senior and a junior with no failed API calls and no page errors.
-- Approving from Review marks the task done.
-- The Company view toggle works.
-- The PM stays logged in across a Run demo, and the login list follows the loaded project.
+**Run it on your machine instead** (same checks, against local servers):
+```bash
+npm install && npm run dev          # terminal 1 (repo root): backend  http://localhost:8787 (status page at /)
+npm run web:install && npm run web  # terminal 2 (repo root): frontend http://localhost:8080
+npm run smoke                       # optional: the self-test against localhost
+```
 
 ## 1. Start a server with the Lumen project
 Test locally: Run demo would start the simulated Hassan too, and he'd take your tasks.
