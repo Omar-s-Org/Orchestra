@@ -1,4 +1,4 @@
-# Orchestra
+# Orchestra — build plan (HACK_002, submit by Sun 27 Sep 08:00 CEST)
 
 **One line:** A shared project workspace where every person's AI agent works through MCP, with scope-based access: collaborative at the bottom, a management view at the top.
 

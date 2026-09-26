@@ -1,0 +1,10 @@
+{
+  "name": "orchestra",
+  "private": true,
+  "workspaces": ["server"],
+  "scripts": {
+    "dev": "npm run dev -w server",
+    "test": "npm test -w server",
+    "seed": "npm run seed -w server"
+  }
+}
