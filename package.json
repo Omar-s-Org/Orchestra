@@ -11,7 +11,10 @@
     "seed": "npm run seed -w server",
     "load": "npm run load -w server --",
     "sim": "npm run sim -w server --",
-    "check": "npm run check -w server --"
+    "check": "npm run check -w server --",
+    "demo": "npm run sim -w server -- --url https://orchestra-api-production-f275.up.railway.app --reset --loop",
+    "demo:backup": "npm run sim -w server -- --url https://orchestra-api-am50.onrender.com --reset --loop",
+    "demo:local": "npm run sim -w server -- --reset --loop"
   },
   "engines": {
     "node": ">=22"

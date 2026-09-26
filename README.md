@@ -62,6 +62,15 @@ Optional header `X-Agent-Name: Omar's Claude` sets the name shown in the live vi
 
 Rules the server enforces: a task is **locked** until all its prerequisites (`depends_on`) are **done** (approved), so it can't be started, reported on or submitted before then; tasks come in a suggested order (`sequence`: prerequisites first, then due date), but any unlocked task may be done first; only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat (agent shows "active" for 60 s).
 
+## Demo in one command
+```bash
+npm run demo          # Railway: reset the demo data (as the PM) + John, Priya and Mia work live, forever (Ctrl+C to stop)
+npm run demo:backup   # same against the Render backup (wait ~1 min if it was asleep)
+npm run demo:local    # same against http://localhost:8787 (run `npm run dev` first)
+```
+⚠️ `npm run demo` **resets the shared Railway data**. Tell the team before a rehearsal or video take.
+Demo beat: Priya's agent submits **T-4** → approve it as Sara in the UI → **T-6/T-7 unlock** → the agents (or a real Claude Code agent) pick them up.
+
 ## Simulated agents
 John, Priya and Mia are played by real MCP clients, so the board comes alive next to the real Claude Code agents:
 ```bash
