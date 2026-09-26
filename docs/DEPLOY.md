@@ -5,7 +5,7 @@ The backend (REST + MCP + SQLite) runs as a single Node service. We run **two in
 | Role | Host | URL | Data |
 |---|---|---|---|
 | **Primary** | Railway + volume at `/data` | `https://orchestra-api-production-f275.up.railway.app` | persistent |
-| **Standby** | Render (free) | `https://orchestra-api-am50.onrender.com` | demo data, re-seeded on every restart; sleeps after ~15 min idle (~1 min to wake) |
+| **Standby** | Render (free) | `https://orchestra-api-rt0g.onrender.com` | demo data, re-seeded on every restart; sleeps after ~15 min idle (~1 min to wake) |
 
 The two databases are **not synced**. The standby is for failover during the demo: it serves the same seeded Northwind project.
 
@@ -23,7 +23,7 @@ New → **Blueprint** → repo `omarjku/Orchestra` → it reads `render.yaml` (w
 - **Agents** (Claude Code / Hassan's simulator): re-point to the standby:
   ```bash
   claude mcp remove orchestra
-  claude mcp add --transport http orchestra https://orchestra-api-am50.onrender.com/mcp --header "Authorization: Bearer ak_omar"
+  claude mcp add --transport http orchestra https://orchestra-api-rt0g.onrender.com/mcp --header "Authorization: Bearer ak_omar"
   ```
 
 ## Verify a deploy

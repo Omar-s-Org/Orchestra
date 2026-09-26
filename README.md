@@ -16,7 +16,7 @@ Project management where every team member works through their own AI agent. Age
 | Role | URL |
 |---|---|
 | Backend primary (Railway) | `https://orchestra-api-production-f275.up.railway.app`: API `/api`, agents `/mcp` |
-| Backend standby (Render) | `https://orchestra-api-am50.onrender.com`: same paths, demo data |
+| Backend standby (Render) | `https://orchestra-api-rt0g.onrender.com`: same paths, demo data |
 | Frontend | Lovable |
 
 Setup + failover: [`docs/DEPLOY.md`](docs/DEPLOY.md).
@@ -104,7 +104,7 @@ John, Priya and Mia are played by real MCP clients, so the board comes alive nex
 npm run sim                          # against http://localhost:8787 (server must be running)
 npm run sim -- --reset               # reset the demo data first (as the PM), then run
 npm run sim -- --loop                # for the demo: agents stay "active" after their work and redo it after each Reset demo; Ctrl+C stops
-npm run sim -- --url https://orchestra-api-am50.onrender.com --people john,mia --speed 2    # hosted, only some people, slower
+npm run sim -- --url https://orchestra-api-rt0g.onrender.com --people john,mia --speed 2    # hosted, only some people, slower
 ```
 Each agent picks its open tasks, starts them, reports 2–3 progress updates (explanation, agents used, cost), attaches a generated SVG chart and submits for review. It takes about a minute at `--speed 1`. Without `--loop` the sim exits when done and agents turn "idle" 60 s later. What they say lives in `server/sim/stories/northwind.json`, one entry per task id.
 
