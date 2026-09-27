@@ -46,6 +46,8 @@ export function DemoControl({ me }: { me: Me }) {
   const wasRunning = useRef(false);
   useEffect(() => {
     if (!s) return;
+    // A new run reuses the same task ids: forget what the previous run announced.
+    if (s.running && !wasRunning.current) announced.current.clear();
     for (const w of s.waiting_for_approval) {
       if (announced.current.has(w.id)) continue;
       announced.current.add(w.id);

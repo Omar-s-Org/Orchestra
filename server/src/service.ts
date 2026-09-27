@@ -543,7 +543,9 @@ export function createTask(c: Ctx, t: NewTask) {
   return guarded(c, "create_task", null, () => {
     requirePm(c);
     if (!t.title?.trim() || !t.milestoneId) throw new BadRequest("title and milestoneId are required");
-    if (!c.db.prepare("SELECT 1 FROM milestones WHERE id=?").get(t.milestoneId)) throw new NotFound(`Milestone ${t.milestoneId} not found`);
+    const ms = c.db.prepare("SELECT name, approved_at FROM milestones WHERE id=?").get(t.milestoneId) as { name: string; approved_at: string | null } | undefined;
+    if (!ms) throw new NotFound(`Milestone ${t.milestoneId} not found`);
+    if (ms.approved_at) throw new BadRequest(`${ms.name} is signed off; add the task to an open milestone`);
     // Every reference must exist, or the task would point at people/tasks/docs nobody can resolve.
     const missing = (table: string, ids: string[] | null = []) => (ids ?? []).filter(x => !c.db.prepare(`SELECT 1 FROM ${table} WHERE id=?`).get(x));
     const bad = [

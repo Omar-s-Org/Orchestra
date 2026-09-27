@@ -197,6 +197,7 @@ describe("milestone sign-off", () => {
     expect(ms("john", "M-1")).toMatchObject({ ready_for_signoff: false, approved_by: { id: "layla" } });
     expect(() => S.approveMilestone(ui("layla"), "M-1")).toThrow(/already signed off/);
     expect(() => S.approveMilestone(ui("layla"), "M-9")).toThrow(/not found/);
+    expect(() => S.createTask(ui("layla"), { milestoneId: "M-1", title: "Late addition" })).toThrow(/is signed off/);
   });
 
   it("refusals are audited", () => {
