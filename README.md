@@ -44,175 +44,73 @@ Teams already hand real work to AI agents: code, research, copy, charts. But pro
 
 ---
 
-## How it works
-
-### The architecture
-
-Read it top to bottom: who uses Orchestra, how they get in, what the server decides, and what comes out. On GitHub, use the diagram's controls to zoom, pan or open it full screen.
+## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph WHO["① Who"]
+    subgraph CLIENTS["Clients"]
         direction LR
-        DEV["👩‍💻 Developer<br/>+ Claude Code or any MCP client"]
-        HUM["🧑‍💼 PM · Senior · Junior<br/>in the web app"]
-        SIM["🎭 Simulated agents<br/>scripted MCP clients"]
+        CC["Claude Code / any MCP client<br/><i>Streamable HTTP · Bearer ak_…</i>"]
+        SIM["Simulated agents · server/sim<br/><i>MCP SDK client · scripted stories</i>"]
+        WEB["Web app · web/<br/><i>TanStack Start · React · TanStack Query</i><br/><i>polling 2 s pages · 5 s graph</i>"]
+        STAT["Status page · GET /<br/><i>demo controls · self-test</i>"]
     end
 
-    subgraph IN["② Ways in"]
-        direction LR
-        MCP["MCP · /mcp<br/>9 agent tools<br/>personal key ak_…"]
-        REST["REST · /api<br/>email + password login"]
-    end
-
-    subgraph CORE["③ Orchestra server · every rule lives here"]
+    subgraph API["Express server · Node 22 · :8787"]
         direction TB
-        PERM["🔐 Permission engine<br/>who can see and change what"]
-        LOCK["🔒 Ordering<br/>a task is locked until its prerequisites are done"]
-        SVC["⚙️ Task service<br/>start · progress · artifacts · submit · approve"]
-        AUD["📝 Audit log<br/>refused attempts are recorded"]
-        DB[("🗄️ SQLite")]
-        PERM --> LOCK --> SVC --> DB
-        PERM -. "403 / 409" .-> AUD
+        subgraph EDGE["Transport"]
+            direction LR
+            MCP["POST /mcp<br/><i>stateless · JSON responses</i><br/>next_task · start_task · report_progress<br/>attach_artifact · submit_task · get_task<br/>team_board · search_kb · read_kb"]
+            REST["/api<br/><i>auth · me · tasks · activity · agents/live</i><br/><i>overview · graph · kb · artifacts</i><br/><i>milestones/:id/approve · webhooks · audit · demo</i>"]
+        end
+        AUTH["auth.ts<br/><i>agent key or session token → user</i>"]
+        PERM["permissions.ts<br/><i>visibility · worker check · KB clearance</i><br/><i>milestone approval rules</i>"]
+        ORD["ordering.ts<br/><i>dependency graph · blocked_by · locked</i>"]
+        SVC["service.ts<br/><i>transactional task + milestone operations</i>"]
+        AUD["audit<br/><i>refused calls</i>"]
+        HOOK["webhooks.ts<br/><i>fire-and-forget POST · 5 s timeout</i>"]
+        MCP --> AUTH
+        REST --> AUTH
+        AUTH --> PERM --> ORD --> SVC
+        PERM -- "403 Forbidden" --> AUD
+        ORD -- "409 Locked" --> AUD
+        SVC --> HOOK
     end
 
-    subgraph OUT["④ What comes out"]
+    subgraph DATA["SQLite · better-sqlite3"]
         direction LR
-        LIVE["📋 Live board · project graph<br/>activity · cost per person"]
-        HOOK["📡 Webhooks<br/>Slack · CRM · CI · finance"]
+        T1[("users · auth_sessions<br/>agent_sessions")]
+        T2[("projects · milestones · tasks<br/>task_people · task_departments<br/>task_links · task_updates")]
+        T3[("kb_docs · task_docs<br/>artifacts")]
+        T4[("webhooks · audit · meta")]
     end
 
-    DEV --> MCP
+    subgraph EXT["Webhook subscribers"]
+        EV["task.status_changed · task.progress · task.submitted<br/>milestone.ready · milestone.approved"]
+    end
+
+    PF["server/projects/*.json<br/><i>project files · seed</i>"]
+
+    CC --> MCP
     SIM --> MCP
-    HUM --> REST
-    MCP --> PERM
-    REST --> PERM
-    SVC --> LIVE
-    SVC --> HOOK
-    LIVE -. "polls every 2–5 s" .-> HUM
+    WEB --> REST
+    STAT --> REST
+    SVC --> DATA
+    AUD --> T4
+    PF -. "load / reset" .-> DATA
+    HOOK --> EV
 
-    style CORE fill:#eef3ff,stroke:#2f6fed,color:#1a1a1a
-    style PERM fill:#2f6fed,stroke:#1c4fbf,color:#ffffff
-    style LOCK fill:#2f6fed,stroke:#1c4fbf,color:#ffffff
-    style SVC fill:#2f6fed,stroke:#1c4fbf,color:#ffffff
-    style AUD fill:#fff4e6,stroke:#f59f00,color:#1a1a1a
+    classDef client fill:#f8f9fb,stroke:#adb5bd,color:#1a1a1a
+    classDef edge fill:#e7eefe,stroke:#2f6fed,color:#1a1a1a
+    classDef core fill:#2f6fed,stroke:#1c4fbf,color:#ffffff
+    classDef warn fill:#fff4e6,stroke:#f59f00,color:#1a1a1a
+    classDef store fill:#f1f3f5,stroke:#495057,color:#1a1a1a
+    class CC,SIM,WEB,STAT,PF client
+    class MCP,REST edge
+    class AUTH,PERM,ORD,SVC,HOOK core
+    class AUD warn
+    class T1,T2,T3,T4,EV store
 ```
-
-### The life of one task
-
-Every call an agent makes, in order. The developer sees each write before it's sent, and the server checks every call against the same rules.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Dev as 👩‍💻 Developer
-    participant Agent as 🤖 Claude Code
-    participant Srv as ⚙️ Orchestra server
-    participant App as 📋 Web app + webhooks
-    actor Lead as 🧑‍💼 PM / Senior
-
-    Dev->>Agent: "Work your next Orchestra task"
-    Agent->>Srv: next_task
-    Srv-->>Agent: brief, scope and docs of the first unlocked task
-    Note over Agent,Srv: A locked task is refused with Locked (409)
-
-    Agent->>Dev: Allow start_task?
-    Dev-->>Agent: Yes
-    Agent->>Srv: start_task (one-line plan)
-    Srv->>App: task.status_changed · agent shows as working
-
-    loop While working
-        Agent->>Dev: Allow report_progress?
-        Dev-->>Agent: Yes, or No with a note
-        Agent->>Srv: report_progress (what, how, cost)
-        Srv->>App: task.progress · cost adds up
-    end
-
-    Agent->>Srv: attach_artifact (charts, files)
-    Agent->>Dev: Allow submit_task?
-    Dev-->>Agent: Yes
-    Agent->>Srv: submit_task (completion report)
-    Srv->>App: task.submitted · task is done
-    Srv-->>Agent: dependent tasks unlock · here is your next one
-
-    opt Last open task in the milestone
-        Srv->>App: milestone.ready
-        App->>Lead: Milestone waiting in Review
-        Lead->>Srv: approve milestone
-        Srv->>App: milestone.approved ✅
-    end
-```
-
-### Step by step
-
-Click a step to open it.
-
-<details>
-<summary><b>1 · Pick up work:</b> <code>next_task</code></summary>
-
-<br/>
-
-The agent asks for its next task and gets everything it needs to start in one call: the description, the scope and the knowledge-base docs inline. Tasks come in dependency order. If all of the person's open tasks are waiting on others, the server says which tasks they're waiting on instead of handing out work that can't start yet.
-
-</details>
-
-<details>
-<summary><b>2 · Start:</b> <code>start_task</code></summary>
-
-<br/>
-
-The agent sends a one-line plan. The server checks two things first: that this person is one of the task's workers (otherwise `Forbidden (403)`), and that every prerequisite is done (otherwise `Locked (409)`). Refusals are written to the audit log. On success the task moves to **In progress**, the agent appears live on the board and graph, and `task.status_changed` fires.
-
-</details>
-
-<details>
-<summary><b>3 · Report progress:</b> <code>report_progress</code></summary>
-
-<br/>
-
-One or two short updates while the agent works: what it did, which sub-agents or tools it used, and what it cost. Each update goes to the activity feed and adds to the cost for that person and department. Mentioning another task, like `T-12`, links the two tasks. `task.progress` fires.
-
-</details>
-
-<details>
-<summary><b>4 · Attach results:</b> <code>attach_artifact</code></summary>
-
-<br/>
-
-Charts, documents or code, up to 5 MB each. The server returns a markdown link, and the agent puts it in its report so the file shows up in the activity feed.
-
-</details>
-
-<details>
-<summary><b>5 · Submit:</b> <code>submit_task</code></summary>
-
-<br/>
-
-The agent explains what it did, how, and what it cost. The server requires a real explanation, not just "done". Submitting completes the task, so **tasks that depend on it unlock right away**, and the response tells the agent what to work on next. `task.submitted` fires.
-
-</details>
-
-<details>
-<summary><b>6 · Sign off the milestone:</b> the <b>Review</b> page</summary>
-
-<br/>
-
-When the last task in a milestone is done, `milestone.ready` fires and the milestone appears in **Review**. The PM can approve any milestone. A senior can approve one if all its tasks are in their department and none of them are their own. Agents and juniors never approve. Approving fires `milestone.approved`.
-
-</details>
-
-<details>
-<summary><b>Why it's built this way</b></summary>
-
-<br/>
-
-- **The server decides everything.** Who can see a task, who can change it, what's locked and who can approve are all decided in one place. The web app, the agents and the webhooks can't disagree, and a misbehaving client can't skip a rule.
-- **The developer reviews each update; managers approve milestones.** Checking every single task would slow the team down. Claude Code's permission prompt already puts a human in front of each update, so the PM and seniors sign off whole milestones instead.
-- **Submitting unlocks the next task right away.** Work keeps moving without waiting for anyone, and the milestone sign-off stays the point where humans check the result.
-- **The agent tools are kept small.** Writes return a short acknowledgement, and `next_task` returns the whole brief at once. One task costs an agent about 1,350 tokens of context instead of about 5,840.
-- **It's open by default.** MCP for agents, REST for apps, and webhooks for everything else, so a team can keep the tools it already uses.
-
-</details>
 
 ---
 
