@@ -79,7 +79,7 @@ export function startDemo(db: DB, selfUrl: string, opts: { project?: string; spe
 
   if (real.length) log(`Real agents: ${real.join(", ")}. Waiting for their own agents on ${handsOff.join(", ")}.`);
   // Agents re-check for newly unlocked work every 3 s, so finished prerequisites are picked up almost immediately.
-  const sim = (people: string[]) => runSim({ baseUrl: selfUrl, projectFile: file, people, handsOff, speed, loop: true, heartbeatMs: speed === 0 ? 50 : 3000, signal: stop.signal, log })
+  const sim = (people: string[], standIn = false) => runSim({ baseUrl: selfUrl, projectFile: file, people, handsOff, standIn, speed, loop: true, heartbeatMs: speed === 0 ? 50 : 3000, signal: stop.signal, log })
     .then(r => log(`Agents went offline (${r.submitted} task(s) completed).`))
     .catch(e => { log(`Simulator error: ${(e as Error).message}`); if (current === run) finish("error"); });
   const simulated = cast.filter(id => !real.includes(id));
@@ -94,7 +94,7 @@ export function startDemo(db: DB, selfUrl: string, opts: { project?: string; spe
       if (!standInsStarted && handsOff.every(id => (db.prepare("SELECT status FROM tasks WHERE id=?").get(id) as { status: string } | undefined)?.status === "done")) {
         standInsStarted = true;
         log(`${real.join(", ")} finished ${handsOff.join(", ")} live; the simulator takes over their remaining tasks.`);
-        void sim(real);
+        void sim(real, true);
       }
       const open = (db.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE status != 'done' AND id IN (${taskIds.map(() => "?").join(",")})`).get(...taskIds) as { n: number }).n;
       if (open === 0) finish("complete: every task is done");

@@ -43,29 +43,17 @@ export function DemoControl({ me }: { me: Me }) {
   });
   const s = status.data;
 
-  // One toast per task that reaches review, and one when the run ends.
-  const announced = useRef(new Set<string>());
+  // A toast when the run ends. Milestones ready for approval are announced by MilestoneNotifier.
   const wasRunning = useRef(false);
   useEffect(() => {
     if (!s) return;
-    // A new run reuses the same task ids: forget what the previous run announced.
-    if (s.running && !wasRunning.current) announced.current.clear();
-    for (const w of s.waiting_for_approval) {
-      if (announced.current.has(w.id)) continue;
-      announced.current.add(w.id);
-      if (me.capabilities.review) {
-        toast(`${w.id} ${w.title} is waiting for your approval`, {
-          action: { label: "Review →", onClick: () => void navigate({ to: "/review" }) },
-        });
-      }
-    }
     if (wasRunning.current && !s.running) {
       if (s.end_reason?.startsWith("complete")) {
-        toast.success("Demo complete: the beta milestone shipped.", {
-          description: isPm
-            ? "Sign off the milestone in Review."
+        toast.success("Demo complete: every task in the beta is done.", {
+          description: me.capabilities.review
+            ? "Approve the milestone in Review."
             : "Open the board to see the result.",
-          action: isPm
+          action: me.capabilities.review
             ? { label: "Review →", onClick: () => void navigate({ to: "/review" }) }
             : { label: "Board", onClick: () => void navigate({ to: "/board" }) },
         });
@@ -75,21 +63,20 @@ export function DemoControl({ me }: { me: Me }) {
       void qc.invalidateQueries();
     }
     wasRunning.current = s.running;
-  }, [s, me.capabilities.review, isPm, navigate, qc]);
+  }, [s, me.capabilities.review, navigate, qc]);
 
   const onError = (e: unknown) =>
     toast.error(e instanceof ApiError ? e.message : "Something went wrong");
   const run = useMutation({
     mutationFn: () => api.demoRun(real),
     onSuccess: async (next) => {
-      announced.current.clear();
       qc.setQueryData(["demo-status"], next);
       // The data was reset to Lumen: drop every cached query so no screen shows the old project.
       await qc.invalidateQueries();
       toast.success("Demo started", {
         description: next.real.length
-          ? `${next.real.map((u) => u.name).join(", ")} work their tasks with their own agents. Approve each wave in Review.`
-          : "Approve each wave in Review as it arrives.",
+          ? `${next.real.map((u) => u.name).join(", ")} ${next.real.length > 1 ? "work" : "works"} their first task with their own agent.`
+          : "The agents work through the milestone; approve it in Review when it's done.",
       });
     },
     onError,
@@ -120,7 +107,7 @@ export function DemoControl({ me }: { me: Me }) {
             className="h-6 px-2 text-xs"
             onClick={() => void navigate({ to: "/review" })}
           >
-            {waiting} to review
+            {waiting} to approve
           </Button>
         ) : null}
         {isPm ? (

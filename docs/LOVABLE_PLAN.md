@@ -6,10 +6,10 @@
 **Orchestra** is a project-management workspace where every team member works through their own AI agent. Agents report progress to our backend, and this web app shows the project **live**. What each person sees depends on their role:
 
 - **PM** sees the whole project, including a relational graph of all milestones, tasks and people.
-- **Senior** sees their department's tasks, reviews finished work and sees their team's cost.
+- **Senior** sees their department's tasks, approves their department's finished milestones and sees their team's cost.
 - **Junior** sees their own tasks and their junior coworkers' tasks.
 
-The app is **read-mostly**. Agents do the work and the UI shows it. The only human actions in the UI are **log in/out**, **approve / send back** (senior, PM) and **copy agent connection key**.
+The app is **read-mostly**. Agents do the work and the UI shows it. The only human actions in the UI are **log in/out**, **approve a milestone** (senior, PM) and **copy agent connection key**.
 
 ## 2. Hard constraints
 1. **Frontend only.** Do NOT enable Lovable Cloud, Supabase, any database or any auth provider. Our Express API is the only backend.
@@ -34,7 +34,7 @@ There is **one** layout for everyone. What changes per role comes only from the 
 ### Types
 ```ts
 type Role = "pm" | "senior" | "junior";
-type Status = "todo" | "in_progress" | "review" | "done";
+type Status = "todo" | "in_progress" | "review" | "done";   // "review" is legacy: nothing produces it any more. Hide the Review column
 type UserRef = { id: string; name: string; role: Role; department: string };
 type Live = { agent_name: string; activity: string; since: string } | null;   // an agent is working on it right now
 
@@ -50,12 +50,12 @@ type TaskSummary = {
   due: string | null;            // "2026-10-02" (YYYY-MM-DD) or null
   overdue: boolean;              // past due and not done → show a red "Overdue" badge
   sequence: number | null;       // suggested order (1 = first): prerequisites first, then due date. A hint, not a rule
-  locked: boolean;               // a prerequisite isn't done (approved) yet → can't be started. Show a 🔒 lock
+  locked: boolean;               // a prerequisite isn't done yet → can't be started. Show a 🔒 lock
   blocked_by: { id: string; title: string; status: Status }[];   // the unfinished prerequisites
   live: Live;
   cost_usd: number;              // total reported by agents so far
   updated_at: string;            // ISO
-  allowed_actions: ("approve" | "reopen")[];   // UI-relevant actions for the current user
+  allowed_actions: ("approve" | "reopen")[];   // always [] now: tasks are never approved one by one (section 13)
 };
 
 type Update = {                  // one agent/human report on a task
@@ -106,9 +106,7 @@ type TaskDetail = TaskSummary & {
 | GET | `/api/me/agent-key` | none | `{ agent_key, mcp_url, command }`, where `command` is a ready-to-copy `claude mcp add …` line |
 | GET | `/api/tasks` | `?status=&department=&person=<userId>&mine=true` (all optional, combinable) | `TaskSummary[]` |
 | GET | `/api/tasks/:id` | none | `TaskDetail` |
-| POST | `/api/tasks/:id/approve` | `{ note? }` | `TaskDetail` (review → done) |
-| POST | `/api/milestones/:id/approve` | `{ note? }` | `{ id, name, approved_at, approved_by }`. **PM only** (403 otherwise); 409 while any task in the milestone isn't done; 400 if already signed off. Section 13 |
-| POST | `/api/tasks/:id/reopen` | `{ note }` | `TaskDetail` (review → in_progress) |
+| POST | `/api/milestones/:id/approve` | `{ note? }` | `{ id, name, approved_at, approved_by }`. The PM, or a senior when every task in the milestone is in their department (`can_approve`); 403 otherwise. 409 while any task in the milestone isn't done; 400 if already approved. Section 13 |
 | GET | `/api/activity` | `?limit=50&task=&via=agent\|ui&kind=progress\|completion\|approval\|status` (all optional) | `Update[]` newest first |
 | GET | `/api/agents/live` | none | `{ user: UserRef, agent_name: string, status: "active" \| "idle", task: {id,title} \| null, activity: string, last_seen: string }[]` |
 | GET | `/api/overview` | none | see below |
@@ -125,11 +123,12 @@ type TaskDetail = TaskSummary & {
 ```ts
 {
   milestones: { id: string; name: string; due: string; total: number; done: number; pct: number;
-    approved_at: string | null; approved_by: UserRef | null;   // PM sign-off (section 13)
+    approved_at: string | null; approved_by: UserRef | null;   // milestone approval (section 13)
+    can_approve: boolean;                                        // this viewer may approve it
     ready_for_signoff: boolean }[];                            // every task done and not signed off yet
   by_status: { todo: number; in_progress: number; review: number; done: number };
   overdue: number;                                   // visible tasks past due and not done
-  review_queue: ReviewItem[];                        // tasks in review I can approve (empty for juniors)
+  review_queue: ReviewItem[];                        // deprecated: always [] (approval is per milestone)
   cost: null | {                                     // null when capabilities.cost is false
     total_usd: number;
     by_department: { department: string; cost_usd: number }[];
@@ -160,7 +159,7 @@ See section 6.
 
 ### 5.5 Task drawer (everyone; right side sheet, about 560px wide)
 1. Id, title, status pill, milestone, due date (red if overdue), department tags, and "Step {sequence}" in the suggested order.
-   If `locked`: an amber banner "🔒 Locked: waiting on T-4 Build product API (in progress). It unlocks when that task is approved." Each blocker links to its task.
+   If `locked`: an amber banner "🔒 Locked: waiting on T-4 Build product API (in progress). It unlocks when that task is done." Each blocker links to its task.
 2. **People:** Workers (avatars and names) and Access (smaller avatars).
 3. **Live banner** when `live` is set: pulsing dot, "{agent_name} is working: {activity}".
 4. Tabs:
@@ -179,7 +178,7 @@ A full-page feed from `/api/activity`, newest first, in the same card design as 
 A search box, then a list of docs (title, excerpt, author, date, and a role badge if `min_role` is above junior). Clicking opens a reader view (markdown body plus "Linked tasks").
 
 ### 5.8 Review (senior + PM, only if `capabilities.review`)
-A list of `review_queue` items (`ReviewItem`, section 4; no extra fetches). Each row shows the latest **completion** summary (markdown, collapsed to 4 lines with an expand control), the cost, and the artifacts, with **Approve** and **Send back** buttons. This is the human-in-the-loop moment of the demo.
+One card per `overview.milestones` item with `ready_for_signoff && can_approve` (section 13; no extra fetches), with **Approve milestone**. There is no per-task approval. This is the human-in-the-loop moment of the demo.
 
 ## 6. Project graph (PM only)
 **Purpose:** show the PM how the project fits together and **who is working together**. Every node and edge comes from the API.
@@ -274,8 +273,8 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 ## 9. Acceptance checklist (demo must pass)
 - [ ] Login works with each demo account; a bad password shows an error.
 - [ ] As **Layla (PM)**: the Graph shows project → milestones → tasks → people, with orange dependency arrows and cyan mention links. Clicking John highlights his tasks and collaborators; live nodes glow.
-- [ ] As **Sara (senior)**: no Graph in the nav. The Board shows only Engineering tasks, cost tiles appear, and the Review page shows tasks awaiting approval. Approve moves the card to Done within 2 s.
-- [ ] As **John (junior)**: sees his own and his junior coworkers' Engineering tasks, but not "Architecture review". No Approve buttons, no cost tiles.
+- [ ] As **Sara (senior)**: no Graph in the nav. The Board shows only Engineering tasks, cost tiles appear, and the Review page shows Engineering milestones whose tasks are all done. Approve adds a ✓ to the milestone within 2 s.
+- [ ] As **John (junior)**: sees his own and his junior coworkers' Engineering tasks, but not "Architecture review". No Review page, no cost tiles.
 - [ ] The task drawer timeline shows markdown explanations with agents used, cost, links and an inline image.
 - [ ] The Live agents rail and Activity feed update without reloading.
 - [ ] Connect your agent shows a copyable command.
@@ -286,7 +285,7 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 - [ ] A hard refresh of `/board?task=T-4` (logged in, LIVE) reopens the drawer with live data, and the browser's network tab shows the request going to the hosted API.
 - [ ] Only the PM sees "Reset demo".
 - [ ] Company view (section 11): only the PM sees the toggle. With it on, `/company` shows every task as a coloured tile. Clicking a tile shows its subtasks and people; clicking a person shows their spend and in-progress tasks. No agent summaries are shown anywhere in this view.
-- [ ] Locked tasks show 🔒 + "Waiting on …". After a senior approves the blocking task, the lock disappears within 2 s.
+- [ ] Locked tasks show 🔒 + "Waiting on …". When the blocking task is submitted (done), the lock disappears within 2 s.
 
 ## 10. App architecture and UI defaults (fixed decisions; don't guess)
 
@@ -312,7 +311,7 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 ### Data layer
 - `api.ts` has one `request()` function. It adds the bearer token, parses `{error}`, and throws `ApiError(status, message)`. **On 401**, it clears the token, clears the query cache and navigates to `/login`, one time only (guard against a redirect loop).
 - **Polling** with TanStack Query: `useQuery({ refetchInterval: 2000, placeholderData: keepPreviousData, refetchIntervalInBackground: false })`. The graph uses 5000. `/api/me` loads once after login and whenever the user changes.
-- Mutations (approve / send back) invalidate the `tasks`, `overview`, `activity` and `task:<id>` queries.
+- Mutations (approve milestone) invalidate the `tasks`, `overview`, `activity` and `task:<id>` queries.
 - **Errors:** one `ErrorBoundary` per page with a "Retry" button. Query errors show inline (not a toast storm): one toast per distinct message.
 
 ### Mock mode logic
@@ -335,7 +334,7 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 - **Empty states** (icon + one line + optional hint):
   - Board: "No tasks match these filters."
   - Activity: "No activity yet. Updates appear here when agents report progress."
-  - Review: "Nothing waiting for review."
+  - Review: "No milestone is waiting for your approval."
   - Live agents: "No agents active right now."
   - Knowledge: "No documents found."
 - **Loading:** skeletons on first load only; after that, keep the previous data while polling.
@@ -390,7 +389,7 @@ Poll every 5 s.
 **Mock mode:** derive everything from the same mock tasks, overview and people (like `buildGraph()`); no separate fixtures.
 
 ## 12. Run demo: one button, four agents finish a project
-**Purpose:** the PM clicks **▶ Run demo** and the whole story plays out live in about 2 minutes. The server loads the **Lumen** startup project ("Lumen: AI Support Assistant"), and the agents of **Priya, John, Omar and Hassan** (real MCP clients running on the server) finish milestone **M-2 "Beta: Lumen Assist v1"** (T-5 … T-14) in three waves. **A human approves each wave** from Review, which unlocks the next one. The run ends by itself when all 10 tasks are done.
+**Purpose:** the PM clicks **▶ Run demo** and the whole story plays out live in about 2 minutes. The server loads the **Lumen** startup project ("Lumen: AI Support Assistant"), and the agents of **Priya, John, Omar and Hassan** (real MCP clients running on the server) finish milestone **M-2 "Beta: Lumen Assist v1"** (T-5 … T-14) on their own; each submitted task unlocks the next. The run ends by itself when all 10 tasks are done, and then **a human approves the milestone** in Review.
 
 **API** (all shapes are checked by `npm run check`):
 ```ts
@@ -403,7 +402,7 @@ type DemoStatus = {
   end_reason: string | null;          // "complete: every task is done" | "stopped" | "time limit (15 min)" | "error"
   cast: UserRef[];                    // the 4 simulated people
   progress: { done: number; total: number } | null;   // over the demo's tasks (10 for Lumen)
-  waiting_for_approval: { id: string; title: string }[];  // demo tasks in review right now
+  waiting_for_approval: { id: string; title: string }[];  // demo milestones whose tasks are all done and not yet approved (id = milestone id, title = its name)
   log: string[];                      // last 20 simulator lines, newest last
 };
 ```
@@ -415,28 +414,32 @@ type DemoStatus = {
 **Important:** starting a run **resets the data** to Lumen: new tasks, new people, and emails at `@lumen.test` (password `demo1234`). **The PM stays logged in** (sessions survive the reset for people with the same id and role). After `run` returns: **drop every cached query** (tasks, overview, graph, KB, me) and refetch. Otherwise the UI shows stale Northwind data.
 
 **UI:**
-1. **Top bar, PM only** (`me.user.role === "pm"`): a primary emerald button **▶ Run demo**. Click → a confirm dialog: *"Reset the data to the Lumen startup and let Priya, John, Omar and Hassan's agents finish the beta. You approve each wave in Review. Takes about 2 minutes."* [Cancel] [Run demo]. The confirm is needed because the reset is destructive.
+1. **Top bar, PM only** (`me.user.role === "pm"`): a primary emerald button **▶ Run demo**. Click → a confirm dialog: *"Reset the data to the Lumen startup and let Priya, John, Omar and Hassan's agents finish the beta. You approve the milestone in Review at the end. Takes about 2 minutes."* [Cancel] [Run demo]. The confirm is needed because the reset is destructive.
 2. **While running**, the button becomes a **status pill**: `● Demo running · 4/10 · Stop` (with a pulsing emerald dot). Stop calls `/api/demo/stop`. Non-PM users see the same pill without Stop.
-3. **Approval nudge:** when `waiting_for_approval` is non-empty, show a yellow badge on the **Review** nav item with the count, and a toast once per new task id: *"T-6 Ticket API is waiting for your approval"* [Review →]. **This is the human-in-the-loop beat. Make it obvious.**
+3. **Approval nudge:** for everyone with `can_approve` on a milestone that becomes `ready_for_signoff`, a toast once: *"Beta: Lumen Assist v1 is ready for your approval"* [Review →]. The pill shows "{n} to approve". **This is the human-in-the-loop beat. Make it obvious.**
 4. **Cast strip** (in the pill's popover or under the Board header while running): the 4 cast avatars with their live status from `GET /api/agents/live`.
 5. **Live log** (optional, in the pill's popover): the last 5 `log` lines in a monospace list.
-6. **Finish:** when `running` flips to false with `end_reason` starting with `complete`, show a success toast: *"Demo complete: the beta milestone shipped. Open the graph or Company view."* [Graph] [Company]. For other reasons show a neutral toast with `end_reason`.
+6. **Finish:** when `running` flips to false with `end_reason` starting with `complete`, show a success toast: *"Demo complete. Approve the milestone in Review."* [Review]. For other reasons show a neutral toast with `end_reason`.
 7. **Login page quick-fill:** fetch `GET /api/demo/accounts` (no token). Render a small "Demo accounts" list under the form (name · role badge · department). Clicking one fills the email and `demo1234`. It picks up the Lumen emails automatically after a run. **Mock mode:** use the section 7 accounts.
 
-**Mock mode:** `run` sets `running: true` and advances one mock task per poll through in_progress → review. Mock "approve" moves it to done; stop after 10. Keep it simple: this is only a fallback.
+**Mock mode:** `run` sets `running: true` and advances one mock task per poll through in_progress → done; stop after 10, then M-2 is ready for approval. Keep it simple: this is only a fallback.
 
-**Suggested video beats** (about 2 min): PM clicks Run → the Board fills with 4 agents working (wave 1: T-5 ingestion, T-6 ticket API, T-7 widget, T-8 CI) → toasts "waiting for approval" → approve in Review → wave 2 unlocks (T-9 answer engine, T-10 hand-off, T-11 live answers, T-12 eval harness) → approve → wave 3 (T-13 go/no-go, T-14 tuning) → approve → "Demo complete" → open the **Graph** (mentions and prerequisites light up) → **Company view** (tiles all green on M-2; T-16 overdue with a red ring on M-3).
+**Suggested video beats** (about 2 min): PM clicks Run → the Board fills with 4 agents working (T-5 ingestion, T-6 ticket API, T-7 widget, T-8 CI) → as each is submitted the next unlock (T-9 answer engine, T-10 hand-off, T-11 live answers, T-12 eval harness, then T-13 go/no-go, T-14 tuning) → "Demo complete" → toast "ready for your approval" → approve M-2 in Review → open the **Graph** (mentions and prerequisites light up) → **Company view** (tiles all green on M-2; T-16 overdue with a red ring on M-3).
 
 **Acceptance:**
 - [ ] Only the PM sees ▶ Run demo and Stop; a junior gets no button, but sees the pill while a run is going.
 - [ ] After Run, the board shows Lumen tasks without a manual refresh, and the PM is still logged in.
-- [ ] Each submit shows up within 2 s as a Review badge and toast; approving unlocks the next wave.
-- [ ] The run ends by itself with "Demo complete" at 10/10.
+- [ ] Each submit shows up within 2 s as Done and unlocks its dependents; nothing waits on a human until the milestone is done.
+- [ ] The run ends by itself with "Demo complete" at 10/10, and the PM and Sara get the "ready for your approval" toast.
 - [ ] The login quick-fill lists `@lumen.test` accounts after a run.
 
-## 13. Milestone sign-off (PM)
-When every task in a milestone is done (each one approved), the **PM signs off the milestone** to close it.
-- **Review page, PM only:** above the task queue, show one card per `overview.milestones` item with `ready_for_signoff: true`: *"Milestone ready for sign-off: {name}. All {total} tasks are done and approved."* Clicking [Sign off milestone] reveals an optional note and [Confirm sign-off], which calls `POST /api/milestones/:id/approve`. Then show a toast "{name} signed off" and refetch everything.
-- **Top bar milestone strip:** put a green ✓ before the name when `approved_at` is set; the tooltip adds "signed off" or "ready for sign-off".
-- **Run demo:** when the run completes, the PM's toast says "Sign off the milestone in Review" and links to Review. This is the last beat of the video.
-- Project files may mark finished milestones as already signed off (`"signed_off": true`; see docs/PROJECT_FORMAT.md). In Lumen, M-1 "Discovery & design" starts signed off.
+## 13. Milestone approval (PM and seniors)
+Approval happens **per milestone, never per task**. Submitting a task completes it (`done`) and unlocks its dependents, so juniors keep working, into the next milestone too. When every task in a milestone is done, it is `ready_for_signoff` and waits for a human.
+- **Who approves:** the PM, any milestone. A senior, only a milestone whose tasks are all in their department. Juniors and agents never. The server says so per viewer in `overview.milestones[].can_approve`.
+- **Notification:** everyone with `can_approve` gets a toast once when the milestone becomes ready: *"{name} is ready for your approval"* [Review →]. Webhook: `milestone.ready`.
+- **Review page (senior + PM):** one card per milestone with `ready_for_signoff && can_approve`: *"Milestone ready for approval: {name}. All {total} tasks are done."* [Approve milestone] reveals an optional note and [Confirm approval], which calls `POST /api/milestones/:id/approve`. Then toast "{name} approved" and refetch. Empty: "No milestone is waiting for your approval."
+- **Board:** no Review column.
+- **Top bar milestone strip:** a green ✓ before the name when `approved_at` is set; the tooltip adds "approved" or "ready for approval".
+- **Run demo:** when the run completes, the toast says "Approve the milestone in Review." This is the last beat of the video.
+- **Approve only for now.** Sending a milestone back, and editing tasks after the project is created, are in docs/BACKLOG.md.
+- Project files may mark finished milestones as already approved (`"signed_off": true`; see docs/PROJECT_FORMAT.md). In Lumen, M-1 "Discovery & design" starts approved.

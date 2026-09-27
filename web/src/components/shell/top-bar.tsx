@@ -14,6 +14,7 @@ import { overviewQuery } from "@/lib/queries";
 import type { Me } from "@/lib/types";
 
 import { DemoControl } from "./demo-control";
+import { MilestoneNotifier } from "./milestone-notifier";
 import { LiveAgentsList, useActiveAgentCount } from "./live-agents";
 import { UserMenu } from "./user-menu";
 
@@ -26,7 +27,7 @@ function MilestoneStrip() {
         <div
           key={m.id}
           className="w-32"
-          title={`${m.name} · due ${m.due} · ${m.done}/${m.total} done${m.approved_at ? " · signed off" : m.ready_for_signoff ? " · ready for sign-off" : ""}`}
+          title={`${m.name} · due ${m.due} · ${m.done}/${m.total} done${m.approved_at ? " · approved" : m.ready_for_signoff ? " · ready for approval" : ""}`}
         >
           <div className="flex justify-between text-[11px]">
             <span className="truncate text-muted-foreground">
@@ -89,6 +90,7 @@ export function TopBar({ me }: { me: Me }) {
             </TooltipProvider>
           </div>
         ) : null}
+        <MilestoneNotifier />
         <DemoControl me={me} />
         <SourcePill />
         <Sheet>

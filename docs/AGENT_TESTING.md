@@ -8,7 +8,7 @@ For Hassan (and anyone checking that a *real* agent works our tools the way the 
    - It resets the data and loads Northwind again at the end.
 2. Open **the app**: https://orchestra-web-production.up.railway.app. The pill in the top bar should say **LIVE**. Pick an account on the login page (password `demo1234`).
    - **PM (`layla@…`):** Board, Activity, Knowledge, Review, Graph, and Company view (the toggle in the top bar).
-   - **Senior (`sara@…` Engineering, `tom@…` Marketing/Growth):** Review. Approving takes two clicks: *Approve*, then *Confirm approve*.
+   - **Senior (`sara@…` Engineering, `tom@…` Marketing/Growth):** Review lists the milestones they can approve (all tasks done, all in their department). Approving takes two clicks: *Approve milestone*, then *Confirm approval*.
    - **Junior (`john@…`, `priya@…`):** only your own and junior coworkers' tasks. Review and Graph aren't in the menu.
 3. **The live demo:** on the status page, click **Run Lumen demo**.
    - In the app, log in as `sara@lumen.test`.
@@ -31,14 +31,14 @@ npm install
 npm run load -- projects/lumen.json   # Lumen: AI Support Assistant, accounts @lumen.test / demo1234
 npm run dev                           # http://localhost:8787
 ```
-Open the UI against `http://localhost:8787` and log in as `sara@lumen.test` (senior, Engineering) to approve work.
+Open the UI against `http://localhost:8787` and log in as `sara@lumen.test` (senior, Engineering) to approve the milestone once all its tasks are done.
 
 ## 2. Connect Claude Code as Hassan's agent
 ```bash
 claude mcp add --transport http orchestra http://localhost:8787/mcp \
   --header "Authorization: Bearer ak_hassan" --header "X-Agent-Name: Hassan's Claude"
 ```
-Hassan's first unlocked task is **T-8 (CI pipeline)**. T-12 unlocks when T-8 is approved, and T-13 when T-9–T-12 are.
+Hassan's first unlocked task is **T-8 (CI pipeline)**. T-12 unlocks when T-8 is submitted (done), and T-13 when T-9–T-12 are.
 
 ## 3. The tools (v2, token-efficient)
 The agent receives the workflow on connect (MCP server instructions), so a plain prompt is enough:
@@ -52,7 +52,7 @@ The expected calls for one task:
 | 2 | `start_task` | `{ok, id, status}` |
 | 3 | `report_progress` ×1–2 | `{ok, id, status}` |
 | 4 | `attach_artifact` (optional) | `url` + `markdown` |
-| 5 | `submit_task` | `{ok, id, status:"review", next}` |
+| 5 | `submit_task` | `{ok, id, status:"done", next}` |
 
 Extra detail is opt-in:
 - `get_task` with `include` (history, artifacts, links, subtasks, all) and `history_limit`.
@@ -86,7 +86,7 @@ Record the results in the table below:
 - The number of tool calls (from the activity feed, or `GET /api/audit` as the PM).
 - The token and cost totals from the JSON output.
 
-| Run | Task reached review | Required fields filled | Tool calls | Input tokens | Output tokens | Cost |
+| Run | Task reached done | Required fields filled | Tool calls | Input tokens | Output tokens | Cost |
 |---|---|---|---|---|---|---|
 | old (bfa57ff) | | | | | | |
 | new | | | | | | |

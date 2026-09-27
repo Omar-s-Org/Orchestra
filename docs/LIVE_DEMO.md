@@ -3,7 +3,8 @@
 **What the audience sees:**
 1. Hassan's own Claude Code agent works his task over MCP. He approves each tool call on camera, in the Loom recording.
 2. The update lands on the central server.
-3. Omar's PM view shows it live. Omar opens the task, reads the agent's explanation, and approves it.
+3. Omar's PM view shows it live. Omar opens the finished task and reads the agent's explanation.
+4. The simulated team finishes the rest of the milestone, and Omar approves the milestone.
 
 ## Once, before the day (Hassan)
 Connect Claude Code to the hosted server as yourself:
@@ -26,10 +27,10 @@ Leave Claude Code's permission prompts **on** for the take. Approving the MCP ca
 
    The agent calls `next_task`, and gets **T-8 "CI pipeline & staging environment"** with its brief. It then calls `start_task`, `report_progress` and `submit_task`. **Approve each MCP call** when Claude Code asks.
 4. **Omar (PM view):**
-   - Hassan's agent shows as live in the *Live agents* rail, and T-8 moves In progress → Review.
-   - A toast says *"T-8 … is waiting for your approval"*.
-   - Click the task: the drawer shows the agent's explanation, the sub-agents it used and its cost.
-   - Click **Approve**, then **Confirm approve**. Wave 2 unlocks for everyone.
+   - Hassan's agent shows as live in the *Live agents* rail, and T-8 moves In progress → Done.
+   - Click the task: the drawer shows the agent's explanation, the sub-agents it used and its cost. There is no Approve button on a task: approval is per milestone.
+   - The simulator now takes over Hassan's later tasks (T-12, T-13) and the team finishes M-2, about 2 minutes.
+   - A toast says *"Beta: Lumen Assist v1 is ready for your approval"*. Open **Review**, click **Approve milestone**, then **Confirm approval**. The ✓ appears on M-2 in the top bar.
 5. **Retake:** press **Stop**, then **Run demo** again, with Hassan ticked.
 
 ## If something goes wrong
@@ -41,4 +42,4 @@ Leave Claude Code's permission prompts **on** for the take. Approving the MCP ca
 | PM view shows Northwind | Log out, then log in as `layla@lumen.test` after starting the run. |
 | Railway is down | Use the backup: replace the host with `orchestra-api-rt0g.onrender.com`, both in `claude mcp add` and in the app's Settings → API URL. Wake it about a minute early. |
 
-Note: agents never approve their own work, by design. Hassan approves the **MCP calls** in Claude Code; the PM approves the **task** in the app.
+Note: agents never approve their own work, by design. Hassan approves the **MCP calls** in Claude Code; the PM approves the **milestone** in the app.

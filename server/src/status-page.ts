@@ -11,7 +11,7 @@ export function statusPage(db: DB, baseUrl: string, cast: { id: string; name: st
   const commit = (process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RENDER_GIT_COMMIT ?? "local").slice(0, 7);
   const host = process.env.RAILWAY_PUBLIC_DOMAIN ? "Railway" : process.env.RENDER ? "Render" : "local";
   const app = process.env.FRONTEND_URL;
-  const tasks = ["todo", "in_progress", "review", "done"].map(s => `${counts[s] ?? 0} ${s.replace("_", " ")}`).join(" · ");
+  const tasks = ["todo", "in_progress", "done"].map(s => `${counts[s] ?? 0} ${s.replace("_", " ")}`).join(" · ");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Orchestra API</title><style>
 :root{--bg:#f8fafc;--card:#fff;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--ok:#16a34a;--bad:#dc2626;--acc:#059669}
@@ -79,7 +79,7 @@ document.querySelectorAll("button").forEach(b => b.onclick = async () => {
     if (act === "run") {
       const real = [...document.querySelectorAll('input[name="real"]:checked')].map(x => x.value);
       await api("/api/demo/run", t, { project: "lumen", real });
-      say("Lumen demo started" + (real.length ? " with real agents for: " + real.join(", ") + ". Their tasks wait for their own Claude Code." : ".") + " Open the app, sign in as the PM (layla@lumen.test) or Sara, and approve each wave in Review.");
+      say("Lumen demo started" + (real.length ? " with real agents for: " + real.join(", ") + ". Their tasks wait for their own Claude Code." : ".") + " The team works through the milestone by itself; when it is done, sign in to the app as the PM (layla@lumen.test) or Sara and approve the milestone in Review.");
     }
     if (act === "stop") { await api("/api/demo/stop", t, {}); say("Demo stopped."); }
     if (act === "selftest") { const r = await api("/api/demo/selftest", t, {}); say(r.steps.map(s => (s.ok ? "✓ " : "✗ ") + s.name + " (" + (s.ms / 1000).toFixed(1) + " s)" + (s.detail ? "\\n    " + s.detail : "")).join("\\n") + "\\n\\n" + (r.ok ? "Everything works." : "Self-test FAILED.")); }

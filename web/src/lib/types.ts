@@ -100,6 +100,8 @@ export type Overview = {
     approved_at?: string | null;
     approved_by?: UserRef | null;
     ready_for_signoff?: boolean;
+    /** Whether this viewer may approve it (PM: any; senior: fully in their department). */
+    can_approve?: boolean;
   }[];
   by_status: { todo: number; in_progress: number; review: number; done: number };
   overdue: number;
