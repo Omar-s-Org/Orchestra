@@ -23,7 +23,7 @@ Agreed model:
 | Junior | Shared KB (read) | **Keep** |
 | Junior | Agent activity feed | **Keep**: this is the heartbeat of the demo |
 | Senior | Junior activity drill-down | **Keep**: it is the same graph/board zoomed to the department (no separate page) |
-| Senior | Task assignment | **Cut**: the PM sets tasks at setup; no editing in MVP. **Replace with "Review queue"** (approve/reopen), which is needed because juniors can't mark done |
+| Senior | Task assignment | **Cut**: the PM sets tasks at setup; no editing in MVP. **Replace with "Review"**: approve a finished milestone (the senior for milestones fully in their department, the PM for any). Tasks aren't approved one by one; the developer checks each agent update in Claude Code before it is sent |
 | Senior | Budget/cost for team | **Keep, as a cost roll-up** of costs agents report via MCP (no budget data model) |
 | Senior | Agent orchestration | **Cut** (vague, multi-agent out of scope). Covered by "Live agents" |
 | PM | See all work | **Keep**: same graph/board, unzoomed |
@@ -58,10 +58,10 @@ One rule on the server decides what each person sees. The UI is the same for eve
 
 ## Prerequisites, locking and suggested order
 - Each task can list prerequisites (`depends_on`, set by the PM in the project file).
-- **Locked:** while any prerequisite is not **done** (approved by a senior or the PM), the task is locked. Its workers and their agents can't start, report on or submit it; the server refuses with 409 and the refusal is logged. Review isn't enough: done means approved.
+- **Locked:** while any prerequisite is not **done**, the task is locked. A task is done when its agent submits it. Its workers and their agents can't start, report on or submit a locked task; the server refuses with 409 and the refusal is logged.
 - **Suggested order (`sequence`):** prerequisites first (topological order), then earlier due date, then task number. It's a hint: any unlocked task may be done in any order.
 - API: every task carries `sequence`, `locked` and `blocked_by`; lists come back in suggested order; MCP `next_task` returns the caller's next unlocked task and what their locked tasks wait on.
-- Demo beat: Omar's T-6 is locked behind T-4. Priya's agent submits T-4, Sara approves it in the UI, and T-6 unlocks live.
+- Demo beat: Omar's T-6 is locked behind T-4. Priya's agent submits T-4 and T-6 unlocks live. When the whole milestone is done, Sara approves it in Review.
 - Project files with circular prerequisites are rejected at load time.
 
 ## Login & agents
