@@ -1,4 +1,8 @@
-<h1 align="center">🎼 Orchestra</h1>
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Orchestra logo" width="72" height="72">
+</p>
+
+<h1 align="center">Orchestra</h1>
 
 <p align="center">
   <strong>Your team's AI agents, working in the open.</strong><br/>
