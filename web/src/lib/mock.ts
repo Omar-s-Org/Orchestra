@@ -279,7 +279,7 @@ const TASKS: MockTask[] = [
   {
     id: "T-4",
     title: "Architecture review",
-    status: "review",
+    status: "done",
     milestone_id: "M-2",
     parent_id: null,
     departments: ["Engineering"],
@@ -297,7 +297,7 @@ const TASKS: MockTask[] = [
   {
     id: "T-6",
     title: "Beta onboarding emails",
-    status: "review",
+    status: "done",
     milestone_id: "M-2",
     parent_id: null,
     departments: ["Marketing"],
@@ -369,7 +369,7 @@ const TASKS: MockTask[] = [
   {
     id: "T-11",
     title: "Pricing page",
-    status: "review",
+    status: "done",
     milestone_id: "M-3",
     parent_id: null,
     departments: ["Marketing"],
@@ -433,7 +433,7 @@ const SEED_UPDATES: MockUpdate[] = [
     agents_used: ["research agent", "devops agent"],
     cost_usd: 0.82,
     links: [{ label: "Pipeline run", url: "https://example.com/ci/8421" }],
-    status_from: "review",
+    status_from: "in_progress",
     status_to: "done",
     min_ago: 650,
   },
@@ -448,7 +448,7 @@ const SEED_UPDATES: MockUpdate[] = [
     agents_used: [],
     cost_usd: 0,
     links: [],
-    status_from: "review",
+    status_from: "in_progress",
     status_to: "done",
     min_ago: 640,
   },
@@ -513,7 +513,7 @@ const SEED_UPDATES: MockUpdate[] = [
     cost_usd: 1.1,
     links: [{ label: "Review notes", url: "https://example.com/docs/arch-review" }],
     status_from: "in_progress",
-    status_to: "review",
+    status_to: "done",
     min_ago: 48,
   },
   {
@@ -529,7 +529,7 @@ const SEED_UPDATES: MockUpdate[] = [
     cost_usd: 0.74,
     links: [{ label: "Sequence doc", url: "https://example.com/docs/onboarding" }],
     status_from: "in_progress",
-    status_to: "review",
+    status_to: "done",
     min_ago: 26,
   },
   {
@@ -561,7 +561,7 @@ const SEED_UPDATES: MockUpdate[] = [
     cost_usd: 0.88,
     links: [{ label: "Pricing draft", url: "https://example.com/docs/pricing" }],
     status_from: "in_progress",
-    status_to: "review",
+    status_to: "done",
     min_ago: 62,
   },
   {
@@ -745,7 +745,10 @@ function advance() {
   }
 }
 
+const approvals = new Map<string, { at: string; by: string; note: string | null }>();
+
 export function resetMock() {
+  approvals.clear();
   state.tick = 0;
   state.lastTick = 0;
   state.extra = [];
@@ -776,13 +779,20 @@ function canSee(task: MockTask, viewer: MockUser): boolean {
   });
 }
 
-function allowedActions(task: MockTask, viewer: MockUser): ("approve" | "reopen")[] {
-  if (task.status !== "review") return [];
-  if (viewer.role === "pm") return ["approve", "reopen"];
-  if (viewer.role === "senior" && task.departments.includes(viewer.department)) {
-    return ["approve", "reopen"];
-  }
+/** Tasks are never approved one by one; approval is per milestone (see approveMilestone). */
+function allowedActions(_task: MockTask, _viewer: MockUser): ("approve" | "reopen")[] {
   return [];
+}
+
+/** Same rule as the server: the PM approves any milestone; a senior only one fully in their department and not their own work. */
+function canApproveMilestone(viewer: MockUser, milestoneId: string) {
+  if (viewer.role === "pm") return true;
+  const tasks = TASKS.filter((t) => t.milestone_id === milestoneId);
+  return (
+    viewer.role === "senior" &&
+    tasks.length > 0 &&
+    tasks.every((t) => t.departments.includes(viewer.department) && !t.workers.includes(viewer.id))
+  );
 }
 
 function toSummary(task: MockTask, viewer: MockUser): TaskSummary {
@@ -854,14 +864,6 @@ function toArtifacts(taskId: string): Artifact[] {
   }));
 }
 
-function reviewItem(task: MockTask, viewer: MockUser): ReviewItem {
-  const completion = allUpdates().find((u) => u.task_id === task.id && u.kind === "completion");
-  return {
-    ...toSummary(task, viewer),
-    latest_completion: completion ? toUpdate(completion) : null,
-    artifacts: toArtifacts(task.id),
-  };
-}
 
 /* ------------------------------------------------------------------ *
  * Endpoint handlers
@@ -942,6 +944,8 @@ function overview(viewer: MockUser): Overview {
   const milestones = MILESTONES.map((m) => {
     const tasks = visible.filter((t) => t.milestone_id === m.id);
     const done = tasks.filter((t) => t.status === "done").length;
+    const approval = approvals.get(m.id);
+    const allDone = TASKS.filter((t) => t.milestone_id === m.id).every((t) => t.status === "done");
     return {
       id: m.id,
       name: m.name,
@@ -949,6 +953,10 @@ function overview(viewer: MockUser): Overview {
       total: tasks.length,
       done,
       pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0,
+      approved_at: approval?.at ?? null,
+      approved_by: approval ? ref(approval.by) : null,
+      ready_for_signoff: allDone && !approval,
+      can_approve: canApproveMilestone(viewer, m.id),
     };
   });
 
@@ -959,11 +967,7 @@ function overview(viewer: MockUser): Overview {
     done: visible.filter((t) => t.status === "done").length,
   };
 
-  const review_queue = caps.review
-    ? visible
-        .filter((t) => t.status === "review" && allowedActions(t, viewer).includes("approve"))
-        .map((t) => reviewItem(t, viewer))
-    : [];
+  const review_queue: ReviewItem[] = []; // deprecated: approval is per milestone
 
   let cost: Overview["cost"] = null;
   if (caps.cost) {
@@ -1050,43 +1054,16 @@ function taskDetail(viewer: MockUser, id: string): TaskDetail {
   };
 }
 
-function actOnTask(
-  viewer: MockUser,
-  id: string,
-  action: "approve" | "reopen",
-  note?: string | undefined,
-): TaskDetail {
-  const task = TASKS.find((t) => t.id === id);
-  if (!task) throw new MockError(404, `Task ${id} not found`);
-  if (!canSee(task, viewer)) throw new MockError(403, `You don't have access to ${id}`);
-  if (!allowedActions(task, viewer).includes(action)) {
-    throw new MockError(403, `You are not allowed to ${action === "approve" ? "approve" : "send back"} ${id}`);
-  }
-  if (action === "reopen" && !note?.trim()) throw new MockError(400, "A note is required when sending work back");
-
-  const from = task.status;
-  task.status = action === "approve" ? "done" : "in_progress";
-  task.updated_min = 0;
-  state.extra.unshift({
-    id: state.nextId++,
-    task_id: task.id,
-    kind: action === "approve" ? "approval" : "status",
-    via: "ui",
-    user_id: viewer.id,
-    agent: false,
-    summary: note?.trim()
-      ? note.trim()
-      : action === "approve"
-        ? "Approved."
-        : "Sent back for changes.",
-    agents_used: [],
-    cost_usd: 0,
-    links: [],
-    status_from: from,
-    status_to: task.status,
-    min_ago: 0,
-  });
-  return taskDetail(viewer, id);
+function approveMilestone(viewer: MockUser, id: string, note?: string) {
+  const m = MILESTONES.find((x) => x.id === id);
+  if (!m) throw new MockError(404, `Milestone ${id} not found`);
+  if (!canApproveMilestone(viewer, id)) throw new MockError(403, `${viewer.name} can't approve ${m.name}`);
+  if (approvals.has(id)) throw new MockError(400, `${m.name} is already approved`);
+  const open = TASKS.filter((t) => t.milestone_id === id && t.status !== "done");
+  if (open.length) throw new MockError(409, `${m.name} still has open tasks: ${open.map((t) => t.id).join(", ")}`);
+  const at = new Date().toISOString();
+  approvals.set(id, { at, by: viewer.id, note: note?.trim() || null });
+  return { id, name: m.name, approved_at: at, approved_by: ref(viewer.id) };
 }
 
 function listActivity(viewer: MockUser, params: URLSearchParams): Update[] {
@@ -1251,11 +1228,8 @@ export function handleMock(
   const kbMatch = p.match(/^\/api\/kb\/([^/]+)$/);
   if (kbMatch) return readKb(viewer, kbMatch[1]!);
 
-  const approve = p.match(/^\/api\/tasks\/([^/]+)\/approve$/);
-  if (approve && method === "POST") return actOnTask(viewer, approve[1]!, "approve", payload.note);
-
-  const reopen = p.match(/^\/api\/tasks\/([^/]+)\/reopen$/);
-  if (reopen && method === "POST") return actOnTask(viewer, reopen[1]!, "reopen", payload.note);
+  const approveMs = p.match(/^\/api\/milestones\/([^/]+)\/approve$/);
+  if (approveMs && method === "POST") return approveMilestone(viewer, approveMs[1]!, payload.note);
 
   const task = p.match(/^\/api\/tasks\/([^/]+)$/);
   if (task && method === "GET") return taskDetail(viewer, task[1]!);

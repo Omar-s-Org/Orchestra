@@ -1,17 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Bot, FileText, Lock } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { Markdown } from "@/components/markdown";
 import { Link } from "@tanstack/react-router";
 
 import { Avatar, Chip, UpdateCard, DueLabel, OverdueBadge, StatusPill } from "@/components/task-bits";
-import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { useSearchValues } from "@/hooks/use-search";
-import { useTaskAction } from "@/hooks/use-task-actions";
 import { useOpenTask } from "@/hooks/use-task-param";
 import { artifactUrl } from "@/lib/api";
 import { money, relativeTime, STATUS_LABEL } from "@/lib/format";
@@ -112,7 +109,6 @@ function DrawerBody({ id }: { id: string }) {
         </div>
       </Tabs>
 
-      <Actions t={t} />
     </>
   );
 }
@@ -273,61 +269,3 @@ export function FileGrid({ artifacts }: { artifacts: Artifact[] }) {
   );
 }
 
-function Actions({ t }: { t: TaskDetail }) {
-  const [mode, setMode] = useState<null | "approve" | "reopen">(null);
-  const [note, setNote] = useState("");
-  const action = useTaskAction();
-  const canApprove = t.allowed_actions.includes("approve");
-  const canReopen = t.allowed_actions.includes("reopen");
-  if (!canApprove && !canReopen) return null;
-
-  const submit = () => {
-    if (!mode) return;
-    action.mutate(
-      { id: t.id, action: mode, note: note.trim() },
-      { onSuccess: () => { setMode(null); setNote(""); } },
-    );
-  };
-
-  return (
-    <div className="space-y-2 border-t bg-surface p-4">
-      {mode ? (
-        <>
-          <Textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={mode === "approve" ? "Optional note" : "What needs to change? (required)"}
-            rows={3}
-            autoFocus
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setMode(null)}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              disabled={action.isPending || (mode === "reopen" && !note.trim())}
-              onClick={submit}
-              className={mode === "approve" ? "bg-success text-success-foreground hover:bg-success/90" : "bg-warning text-warning-foreground hover:bg-warning/90"}
-            >
-              {mode === "approve" ? "Confirm approve" : "Send back"}
-            </Button>
-          </div>
-        </>
-      ) : (
-        <div className="flex justify-end gap-2">
-          {canReopen ? (
-            <Button size="sm" className="bg-warning text-warning-foreground hover:bg-warning/90" onClick={() => setMode("reopen")}>
-              Send back
-            </Button>
-          ) : null}
-          {canApprove ? (
-            <Button size="sm" className="bg-success text-success-foreground hover:bg-success/90" onClick={() => setMode("approve")}>
-              Approve
-            </Button>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}

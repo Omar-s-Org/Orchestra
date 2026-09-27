@@ -1,6 +1,6 @@
 /**
  * Run demo (LOVABLE_PLAN §12): PM-only "Run demo" button, a live status pill while it runs,
- * a toast for every task that lands in review, and a toast when the run ends.
+ * and a toast when the run ends. Ready milestones are announced by MilestoneNotifier.
  * Only shown against the live backend (mock mode has no demo runner).
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDataSource } from "@/hooks/use-data-source";
 import { ApiError, api } from "@/lib/api";
+import { overviewQuery } from "@/lib/queries";
 import type { Me } from "@/lib/types";
 
 export function DemoControl({ me }: { me: Me }) {
@@ -42,6 +43,9 @@ export function DemoControl({ me }: { me: Me }) {
     refetchInterval: (q) => (q.state.data?.running ? 2000 : 10_000),
   });
   const s = status.data;
+  // Only people who can approve one of the open milestones are sent to Review.
+  const overview = useQuery(overviewQuery());
+  const approver = !!overview.data?.milestones.some((m) => m.can_approve && !m.approved_at);
 
   // A toast when the run ends. Milestones ready for approval are announced by MilestoneNotifier.
   const wasRunning = useRef(false);
@@ -50,10 +54,10 @@ export function DemoControl({ me }: { me: Me }) {
     if (wasRunning.current && !s.running) {
       if (s.end_reason?.startsWith("complete")) {
         toast.success("Demo complete: every task in the beta is done.", {
-          description: me.capabilities.review
+          description: approver
             ? "Approve the milestone in Review."
             : "Open the board to see the result.",
-          action: me.capabilities.review
+          action: approver
             ? { label: "Review →", onClick: () => void navigate({ to: "/review" }) }
             : { label: "Board", onClick: () => void navigate({ to: "/board" }) },
         });
@@ -63,7 +67,7 @@ export function DemoControl({ me }: { me: Me }) {
       void qc.invalidateQueries();
     }
     wasRunning.current = s.running;
-  }, [s, me.capabilities.review, navigate, qc]);
+  }, [s, approver, navigate, qc]);
 
   const onError = (e: unknown) =>
     toast.error(e instanceof ApiError ? e.message : "Something went wrong");
@@ -100,7 +104,7 @@ export function DemoControl({ me }: { me: Me }) {
         <span className="tabular-nums">
           Demo running · {s.progress?.done ?? 0}/{s.progress?.total ?? 0}
         </span>
-        {waiting > 0 && me.capabilities.review ? (
+        {waiting > 0 && approver ? (
           <Button
             size="sm"
             variant="secondary"

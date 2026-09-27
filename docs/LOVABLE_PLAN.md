@@ -357,7 +357,7 @@ Clean, modern SaaS: Linear meets Obsidian. Light theme by default with a dark mo
 Poll every 5 s.
 
 **Layout (dense, built for 50–300 tasks):**
-1. **KPI row:** Tasks · % done · In progress · In review · Overdue · Agent spend (`$`).
+1. **KPI row:** Tasks · % done · In progress · Milestones approved · Overdue · Agent spend (`$`).
 2. **Group-by switch:** Milestone (default) · Department · Person. One row per group: the group name and a thin progress bar, then that group's tasks as a wrap of **small square tiles** (about 36 px, `T-12` inside, title on hover).
 3. **Tile colours** (legend always visible, top-right):
 
@@ -365,7 +365,6 @@ Poll every 5 s.
 |---|---|
 | To do | **red** `#ef4444` |
 | In progress | **orange** `#f97316` |
-| In review | **yellow** `#eab308` |
 | Done | **green** `#22c55e` |
 
    Extra markings:

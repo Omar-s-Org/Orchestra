@@ -122,7 +122,7 @@ npm run demo:backup   # same against the Render backup (wait ~1 min if it was as
 npm run demo:local    # same against http://localhost:8787 (run `npm run dev` first)
 ```
 ⚠️ `npm run demo` **resets the shared Railway data**. Tell the team before a rehearsal or video take.
-Demo beat: Priya's agent submits **T-4** → **T-6/T-7 unlock** → the agents (or a real Claude Code agent) pick them up → when the milestone is done, Sara approves it in Review.
+Demo beat: Priya's agent submits **T-4** → **T-6/T-7 unlock** → the agents (or a real Claude Code agent) pick them up → when the milestone is done, the PM approves it in Review (a senior only approves milestones fully in their department).
 
 ## Run demo button (Lumen startup)
 The PM can start a full demo **from the UI** (or `POST /api/demo/run` with `{"project":"lumen"}`). The server resets the data to **Lumen: AI Support Assistant** (`server/projects/lumen.json`, accounts `@lumen.test`, password `demo1234`). The agents of **Priya, John, Omar and Hassan** then finish milestone M-2 (T-5 … T-14) on their own; then the PM or Sara approves the milestone in Review. It takes about 2 minutes. `GET /api/demo/status` shows progress and the milestones waiting for approval; `POST /api/demo/stop` stops it. The PM's login survives the reset. Stories: `server/sim/stories/lumen.json`. Spec for the UI: `docs/LOVABLE_PLAN.md` section 12.

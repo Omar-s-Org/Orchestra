@@ -73,6 +73,8 @@ export function openDb(file = process.env.DATABASE_PATH ?? "./data/orchestra.sql
   if (!cols.includes("due")) db.exec("ALTER TABLE tasks ADD COLUMN due TEXT");
   const mcols = (db.prepare("PRAGMA table_info(milestones)").all() as { name: string }[]).map(c => c.name);
   if (!mcols.includes("approved_at")) db.exec("ALTER TABLE milestones ADD COLUMN approved_at TEXT; ALTER TABLE milestones ADD COLUMN approved_by TEXT;");
+  // Tasks are no longer approved one by one: anything left in "review" by an older build is done.
+  db.exec("UPDATE tasks SET status='done' WHERE status='review'");
   return db;
 }
 

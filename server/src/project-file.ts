@@ -24,7 +24,7 @@ export const ProjectFile = z.object({
   milestones: z.array(z.object({ id, name: z.string().min(1), due: date.optional(), signed_off: z.boolean().default(false) })).min(1),
   docs: z.array(z.object({ id, title: z.string().min(1), body: z.string().min(1), min_role: role.default("junior"), author: id })).default([]),
   tasks: z.array(z.object({
-    id, title: z.string().min(1), milestone: id, parent: id.optional(), due: date.optional(), status: status.default("todo"),
+    id, title: z.string().min(1), milestone: id, parent: id.optional(), due: date.optional(), status: z.enum(["todo", "in_progress", "done"]).default("todo"),
     departments: z.array(z.string()).default([]), workers: z.array(id).default([]), access: z.array(id).default([]),
     depends_on: z.array(id).default([]), docs: z.array(id).default([]),
     description: z.string().default(""), scope: z.string().default(""),
