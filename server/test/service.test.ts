@@ -182,6 +182,28 @@ describe("graph", () => {
   });
 });
 
+describe("presence without pings", () => {
+  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const session = (user: string, task: string | null, minutes: number) =>
+    db.prepare("INSERT OR REPLACE INTO agent_sessions (user_id, agent_name, task_id, activity, started_at, last_seen) VALUES (?,?,?,?,?,?)")
+      .run(user, `${user}-bot`, task, "working", ago(minutes), ago(minutes));
+  const status = (user: string) => S.liveAgents(ui("layla")).find(a => a.user.id === user)?.status;
+
+  it("an agent with a started task stays active for 15 minutes without calling", () => {
+    session("priya", "T-4", 10);                                  // quiet for 10 min, but mid-task
+    expect(status("priya")).toBe("active");
+    expect(S.getTask(ui("layla"), "T-4").live).toMatchObject({ agent_name: "priya-bot" });
+    session("priya", "T-4", 20);                                  // quiet for 20 min: idle
+    expect(status("priya")).toBe("idle");
+    expect(S.getTask(ui("layla"), "T-4").live).toBeNull();
+  });
+
+  it("an agent without a task goes idle after a minute", () => {
+    session("john", null, 2);
+    expect(status("john")).toBe("idle");
+  });
+});
+
 describe("PM setup", () => {
   it("creates a task with departments, workers and access; others can't", () => {
     const t = S.createTask(ui("layla"), { milestoneId: "M-2", title: "Beta feedback survey", departments: ["Marketing"], workers: ["mia"], access: ["tom"], dependsOn: ["T-8"] });

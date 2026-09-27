@@ -8,8 +8,20 @@ export type CheckResult = { name: string; ok: boolean; detail?: string };
 type Accounts = { pm: string; senior: string; junior: string; password: string };
 const DEFAULT_ACCOUNTS: Accounts = { pm: "layla@northwind.test", senior: "sara@northwind.test", junior: "john@northwind.test", password: "demo1234" };
 
-export async function runChecks(baseUrl: string, accounts: Accounts = DEFAULT_ACCOUNTS): Promise<CheckResult[]> {
+/** The PM, first senior and first junior of whichever project the server has loaded (Northwind, Lumen…). */
+export async function accountsFor(baseUrl: string, password = "demo1234"): Promise<Accounts> {
+  try {
+    const list = await (await fetch(`${baseUrl.replace(/\/+$/, "")}/api/demo/accounts`)).json() as { email: string; role: string }[];
+    const by = (role: string) => list.find(a => a.role === role)?.email;
+    const pm = by("pm"), senior = by("senior"), junior = by("junior");
+    if (pm && senior && junior) return { pm, senior, junior, password };
+  } catch { /* older server: fall back to the Northwind accounts */ }
+  return DEFAULT_ACCOUNTS;
+}
+
+export async function runChecks(baseUrl: string, given?: Accounts): Promise<CheckResult[]> {
   const base = baseUrl.replace(/\/+$/, "");
+  const accounts = given ?? await accountsFor(base);
   const results: CheckResult[] = [];
   const record = (name: string, ok: boolean, detail?: string) => results.push({ name, ok, detail });
 

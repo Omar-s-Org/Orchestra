@@ -2,6 +2,21 @@
 
 Project management where every team member works through their own AI agent. Agents report progress over **MCP**; the web app shows the project live, filtered by role: **PM** (whole project + relational graph) › **Senior** (their department, reviews, cost) › **Junior** (own + coworkers' tasks). Open source (MIT); anything that speaks REST, MCP or webhooks can plug in.
 
+## Try it (no setup)
+| | URL |
+|---|---|
+| **The app** | https://orchestra-web-production.up.railway.app: pick a demo account on the login page (password `demo1234`) |
+| **Backend status + test controls** | https://orchestra-api-production-f275.up.railway.app: **Load Northwind** · **Run Lumen demo** · **Stop** · **Self-test** |
+| Backup backend (use it for self-tests during a live demo) | https://orchestra-api-rt0g.onrender.com (sleeps when idle; the first load takes ~1 min) |
+
+- **Browse:** Northwind is loaded by default. Log in as `layla@northwind.test` (PM), `sara@…` (senior) or `john@…` (junior).
+- **Live demo:** on the status page, click **Run Lumen demo**. In the app, log in as `layla@lumen.test` or `sara@lumen.test`. Priya, John, Omar and Hassan's agents work through three waves; approve each wave in **Review** and the next one unlocks.
+- **Is it working?** Click **Self-test** on the status page (or run `npm run smoke -- --url <backend>`). In about 10 s it checks:
+  - health and every endpoint the UI uses, per role
+  - that the MCP tools are the v2 set
+  - the whole 4-agent demo with approvals, including that a junior can't approve
+
+  It then loads Northwind again. It **resets the data**, so run it on the backup during a live demo.
 ## Pitch
 **The problem.** Teams already hand real work to AI agents: code, research, copy, charts. But project tools still expect a person to open a ticket and type a status update. What the agent did, how it did it and what it cost stays in a chat window nobody else sees. Managers can't see who is working on what, and there's no clear point where a human signs off on an agent's work.
 
@@ -29,8 +44,8 @@ Project management where every team member works through their own AI agent. Age
 | Role | URL |
 |---|---|
 | Backend primary (Railway) | `https://orchestra-api-production-f275.up.railway.app`: API `/api`, agents `/mcp` |
-| Backend standby (Render) | `https://orchestra-api-am50.onrender.com`: same paths, demo data |
-| Frontend | Lovable |
+| Backend standby (Render) | `https://orchestra-api-rt0g.onrender.com`: same paths, demo data |
+| Frontend (Railway, from `web/`) | `https://orchestra-web-production.up.railway.app` |
 
 Setup + failover: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
@@ -55,6 +70,27 @@ Password for all: `demo1234`. Agent key (for MCP): `ak_<id>`.
 
 `npm run seed` (or "Reset demo" as the PM / `POST /api/demo/reset`) reloads the current project. `npm run load -- my-project.json` loads another one (format: `docs/PROJECT_FORMAT.md`).
 
+## Frontend (`web/`)
+The web app Saad builds in Lovable (TanStack Start + React; source: [px404/orchestra-live](https://github.com/px404/orchestra-live)) lives in `web/`. It is a separate app and not an npm workspace, so the backend install and the Railway/Render deploys don't change.
+
+Run the full stack locally in two terminals:
+```bash
+npm run dev            # terminal 1: backend  → http://localhost:8787
+npm run web:install    # once
+npm run web            # terminal 2: frontend → http://localhost:8080 (talks to localhost:8787)
+```
+- In dev, the frontend uses `http://localhost:8787` (`web/.env.development`). A production build uses Railway. Set `VITE_API_BASE` to point it anywhere else.
+- The login page lists the accounts of whichever project the backend has loaded (`GET /api/demo/accounts`), so it follows **Run demo** (Lumen) automatically.
+- The top-bar pill says **LIVE** when the backend is reachable. With mock mode `auto` or `on` (Settings), it falls back to built-in mock data.
+
+**Keeping `web/` in sync with Lovable:** Saad keeps working in Lovable on `px404/orchestra-live`. `web/` is a copy of commit `939bbe3` plus these integration changes (each small, so Saad can apply them upstream too):
+- `web/src/lib/config.ts`: the API base can be overridden with `VITE_API_BASE`.
+- `web/.env.development`: local dev points at `http://localhost:8787`.
+- `web/src/lib/api.ts` + `web/src/lib/types.ts`: `api.demoAccounts()` for `GET /api/demo/accounts`.
+- `web/src/routes/login.tsx`: the demo-account list comes from the backend when live (the mock list is the fallback).
+
+To take a newer Lovable version, copy `px404/orchestra-live` over `web/` and re-apply the four changes above (or ask Saad to merge them upstream first).
+
 ## Connect an agent (MCP)
 ```bash
 claude mcp add --transport http orchestra http://localhost:8787/mcp --header "Authorization: Bearer ak_omar"
@@ -76,7 +112,7 @@ Tools are shaped to save the agent tokens: writes return a short acknowledgement
 
 Errors start with their type: `Locked (409)` (prerequisites not approved yet), `Forbidden (403)`, `NotFound (404)`, `BadRequest (400)`. Testing with real agents: [docs/AGENT_TESTING.md](docs/AGENT_TESTING.md).
 
-Rules the server enforces: a task is **locked** until all its prerequisites (`depends_on`) are **done** (approved), so it can't be started, reported on or submitted before then; tasks come in a suggested order (`sequence`: prerequisites first, then due date), but any unlocked task may be done first; only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat (agent shows "active" for 60 s).
+Rules the server enforces: a task is **locked** until all its prerequisites (`depends_on`) are **done** (approved), so it can't be started, reported on or submitted before then; tasks come in a suggested order (`sequence`: prerequisites first, then due date), but any unlocked task may be done first; only a task's workers can start/report/submit it; nobody approves their own work; juniors never approve; KB clearance is a hard floor. Every call counts as a heartbeat: an agent shows "active" for 60 s after a call, or for up to 15 min while it has a started task, so agents never need to call just to look alive.
 
 ## Demo in one command
 ```bash
@@ -96,7 +132,7 @@ John, Priya and Mia are played by real MCP clients, so the board comes alive nex
 npm run sim                          # against http://localhost:8787 (server must be running)
 npm run sim -- --reset               # reset the demo data first (as the PM), then run
 npm run sim -- --loop                # for the demo: agents stay "active" after their work and redo it after each Reset demo; Ctrl+C stops
-npm run sim -- --url https://orchestra-api-am50.onrender.com --people john,mia --speed 2    # hosted, only some people, slower
+npm run sim -- --url https://orchestra-api-rt0g.onrender.com --people john,mia --speed 2    # hosted, only some people, slower
 ```
 Each agent picks its open tasks, starts them, reports 2–3 progress updates (explanation, agents used, cost), attaches a generated SVG chart and submits for review. It takes about a minute at `--speed 1`. Without `--loop` the sim exits when done and agents turn "idle" 60 s later. What they say lives in `server/sim/stories/northwind.json`, one entry per task id.
 

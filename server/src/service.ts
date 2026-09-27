@@ -14,7 +14,16 @@ export type Via = "ui" | "agent";
 export type Ctx = { db: DB; user: User; via: Via; agentName?: string };
 
 const LIVE_MS = 60_000;
+const WORKING_MS = 15 * 60_000;
 const IDLE_MS = 30 * 60_000;
+/**
+ * An agent is active if it called in the last minute, or if it has a started task and called in the last
+ * 15 minutes: agents doing long work never need to call just to look alive (that would cost tokens).
+ */
+const isActive = (s: { task_id: string | null; last_seen: string }) => {
+  const age = Date.now() - Date.parse(s.last_seen);
+  return age < LIVE_MS || (!!s.task_id && age < WORKING_MS);
+};
 const USER_COLS = "id, name, role, department, email, title";
 
 // ---------- auth ----------
@@ -58,7 +67,7 @@ type Lookup = {
 function lookup(db: DB): Lookup {
   const live = new Map<string, { agent_name: string; activity: string; since: string }>();
   for (const s of db.prepare("SELECT task_id, agent_name, activity, started_at, last_seen FROM agent_sessions WHERE task_id IS NOT NULL").all() as { task_id: string; agent_name: string; activity: string; started_at: string; last_seen: string }[])
-    if (!live.has(s.task_id) && Date.now() - Date.parse(s.last_seen) < LIVE_MS) live.set(s.task_id, { agent_name: s.agent_name, activity: s.activity, since: s.started_at });
+    if (!live.has(s.task_id) && isActive(s)) live.set(s.task_id, { agent_name: s.agent_name, activity: s.activity, since: s.started_at });
   return {
     ref: userRefs(db),
     milestone: new Map((db.prepare("SELECT id, name FROM milestones").all() as { id: string; name: string }[]).map(m => [m.id, m])),
@@ -212,7 +221,7 @@ export function liveAgents(c: Ctx) {
     return c.user.role === "pm" || u.id === c.user.id || (u.department === c.user.department && LEVEL[u.role] <= LEVEL[c.user.role]);
   }).map(s => {
     const task = s.task_id && canSeeTask(ix, c.user, s.task_id) ? c.db.prepare("SELECT id, title FROM tasks WHERE id=?").get(s.task_id) as { id: string; title: string } : null;
-    return { user: ref(s.user_id), agent_name: s.agent_name, status: Date.now() - Date.parse(s.last_seen) < LIVE_MS ? "active" : "idle", task, activity: s.activity, last_seen: s.last_seen };
+    return { user: ref(s.user_id), agent_name: s.agent_name, status: isActive(s) ? "active" : "idle", task, activity: s.activity, last_seen: s.last_seen };
   });
 }
 
@@ -291,8 +300,8 @@ export function graph(c: Ctx) {
   const ref = L.ref;
   const project = c.db.prepare("SELECT id, name FROM projects LIMIT 1").get() as { id: string; name: string };
   const tasks = c.db.prepare("SELECT * FROM tasks").all() as TaskRow[];
-  const liveUsers = new Set((c.db.prepare("SELECT user_id, last_seen FROM agent_sessions").all() as { user_id: string; last_seen: string }[])
-    .filter(s => Date.now() - Date.parse(s.last_seen) < LIVE_MS).map(s => s.user_id));
+  const liveUsers = new Set((c.db.prepare("SELECT user_id, task_id, last_seen FROM agent_sessions").all() as { user_id: string; task_id: string | null; last_seen: string }[])
+    .filter(isActive).map(s => s.user_id));
   const nodes: Record<string, unknown>[] = [{ id: `project:${project.id}`, type: "project", label: project.name }];
   const edges: { source: string; target: string; type: string }[] = [];
   for (const m of c.db.prepare("SELECT id, name FROM milestones ORDER BY due").all() as { id: string; name: string }[]) {

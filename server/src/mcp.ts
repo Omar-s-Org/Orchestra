@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { DB } from "./db.js";
 import * as S from "./service.js";
 import * as V from "./mcp-view.js";
+import { MCP_BROWSER_NOTE } from "./status-page.js";
 
 const report = {
   agents_used: z.array(z.string()).optional().describe("Sub-agents/tools used"),
@@ -99,6 +100,7 @@ export function mountMcp(app: Express, db: DB) {
     await transport.handleRequest(req, res, req.body);
   });
   const notAllowed = (_req: Request, res: Response) => void res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed" }, id: null });
-  app.get("/mcp", notAllowed);
+  // A person opening the URL in a browser gets a short explanation instead of a JSON error.
+  app.get("/mcp", (req, res) => req.accepts(["html", "json"]) === "html" ? void res.type("html").send(MCP_BROWSER_NOTE) : notAllowed(req, res));
   app.delete("/mcp", notAllowed);
 }

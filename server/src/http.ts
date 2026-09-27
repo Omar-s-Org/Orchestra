@@ -5,7 +5,9 @@ import * as S from "./service.js";
 import { reset } from "./seed.js";
 import { mountMcp } from "./mcp.js";
 import { Forbidden } from "./permissions.js";
-import { startDemo, stopDemo, demoStatus } from "./demo-runner.js";
+import { startDemo, stopDemo, demoStatus, loadDemo } from "./demo-runner.js";
+import { statusPage } from "./status-page.js";
+import { runSelfTest } from "./selftest.js";
 
 type AuthedReq = Request & { ctx: S.Ctx; token: string };
 
@@ -13,6 +15,8 @@ const bearer = (req: Request) => (req.header("authorization") ?? "").replace(/^B
 
 export function createApp(db: DB) {
   const app = express();
+  // Railway/Render terminate TLS in front of us: trust X-Forwarded-Proto so URLs we hand out are https.
+  app.set("trust proxy", true);
   // Lets an https Lovable preview call a server on the user's own machine (Chrome Private Network Access).
   app.use((req, res, next) => {
     if (req.header("access-control-request-private-network")) res.setHeader("Access-Control-Allow-Private-Network", "true");
@@ -31,6 +35,7 @@ export function createApp(db: DB) {
   };
 
   app.get("/api/health", (_req, res) => { res.json({ ok: true }); });
+  app.get("/", (req, res) => { res.type("html").send(statusPage(db, `${req.protocol}://${req.get("host")}`)); });
   app.post("/api/auth/login", (req, res) => send(res, () => S.login(db, req.body?.email, req.body?.password)));
 
   // DEMO ONLY: who can log in (no passwords); lets the login screen list the current project's people.
@@ -88,6 +93,18 @@ export function createApp(db: DB) {
   r.get("/demo/status", h(c => demoStatus(c.db)));
   r.post("/demo/run", h((c, req) => { pmOnly(c); return startDemo(db, `http://127.0.0.1:${req.socket.localPort}`, req.body ?? {}); }));
   r.post("/demo/stop", h(c => { pmOnly(c); return stopDemo(db); }));
+  r.post("/demo/load", h((c, req) => { pmOnly(c); return loadDemo(db, String(req.body?.project ?? "")); }));
+  // Full end-to-end check of this server (resets the data). One at a time.
+  let selftest: Promise<unknown> | null = null;
+  r.post("/demo/selftest", async (req, res) => {
+    const c = (req as AuthedReq).ctx;
+    if (c.user.role !== "pm") return void res.status(403).json({ error: "Only the PM can run the self-test" });
+    if (selftest) return void res.status(409).json({ error: "A self-test is already running" });
+    selftest = runSelfTest(`http://127.0.0.1:${req.socket.localPort}`);
+    try { res.json(await selftest); }
+    catch (e) { res.status(500).json({ error: (e as Error).message }); }
+    finally { selftest = null; }
+  });
   // Wipes all data, so it needs the PM (the URL may be public when hosted).
   r.post("/demo/reset", h(c => {
     if (c.user.role !== "pm") throw new Forbidden("Only the PM can reset the demo");
