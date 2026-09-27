@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useDataSource } from "@/hooks/use-data-source";
 import { ApiError, api } from "@/lib/api";
 import type { Me } from "@/lib/types";
@@ -31,6 +32,7 @@ export function DemoControl({ me }: { me: Me }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
+  const [real, setReal] = useState<string[]>([]);
 
   const status = useQuery({
     queryKey: ["demo-status"],
@@ -78,13 +80,17 @@ export function DemoControl({ me }: { me: Me }) {
   const onError = (e: unknown) =>
     toast.error(e instanceof ApiError ? e.message : "Something went wrong");
   const run = useMutation({
-    mutationFn: api.demoRun,
+    mutationFn: () => api.demoRun(real),
     onSuccess: async (next) => {
       announced.current.clear();
       qc.setQueryData(["demo-status"], next);
       // The data was reset to Lumen: drop every cached query so no screen shows the old project.
       await qc.invalidateQueries();
-      toast.success("Demo started", { description: "Approve each wave in Review as it arrives." });
+      toast.success("Demo started", {
+        description: next.real.length
+          ? `${next.real.map((u) => u.name).join(", ")} work their tasks with their own agents. Approve each wave in Review.`
+          : "Approve each wave in Review as it arrives.",
+      });
     },
     onError,
   });
@@ -158,6 +164,33 @@ export function DemoControl({ me }: { me: Me }) {
               agents finish the beta. You approve each wave in Review. It takes about 2 minutes.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {s?.available_cast.length ? (
+            <fieldset className="space-y-2 rounded-lg border p-3">
+              <legend className="px-1 text-xs font-medium">Real agents (optional)</legend>
+              <p className="text-xs text-muted-foreground">
+                Tick anyone working live with their own Claude Code. The simulator leaves their
+                tasks alone.
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {s.available_cast.map((u) => (
+                  <label
+                    key={u.id}
+                    htmlFor={`real-${u.id}`}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Checkbox
+                      id={`real-${u.id}`}
+                      checked={real.includes(u.id)}
+                      onCheckedChange={(on) =>
+                        setReal((r) => (on ? [...r, u.id] : r.filter((x) => x !== u.id)))
+                      }
+                    />
+                    {u.name}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => run.mutate()}>Run demo</AlertDialogAction>

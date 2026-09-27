@@ -274,7 +274,8 @@ export const api = {
     request<{ id: string; name: string; approved_at: string }>("POST", `/api/milestones/${id}/approve`, { note }),
   /** Run demo (LOVABLE_PLAN §12): status for anyone logged in; run/stop are PM only. */
   demoStatus: () => request<DemoStatus>("GET", "/api/demo/status"),
-  demoRun: () => request<DemoStatus>("POST", "/api/demo/run", { project: "lumen", speed: 1 }),
+  demoRun: (real: string[] = []) =>
+    request<DemoStatus>("POST", "/api/demo/run", { project: "lumen", speed: 1, real }),
   demoStop: () => request<DemoStatus>("POST", "/api/demo/stop", {}),
 };
 

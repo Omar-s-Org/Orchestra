@@ -407,7 +407,7 @@ type DemoStatus = {
   log: string[];                      // last 20 simulator lines, newest last
 };
 ```
-- `POST /api/demo/run` `{ project: "lumen", speed: 1 }` (PM only). Speed is a delay multiplier: 1 = about 2 min with prompt approvals. Don't expose it; always send 1.
+- `POST /api/demo/run` `{ project: "lumen", speed: 1, real?: string[] }` (PM only). `real` = people whose own agents work their tasks live; the simulator leaves those tasks alone. `DemoStatus.available_cast` lists who can be picked; `DemoStatus.real` shows who was. Speed is a delay multiplier: 1 = about 2 min with prompt approvals. Don't expose it; always send 1.
 - `POST /api/demo/stop` (PM only). Agents stop; the data stays where it is.
 - `GET /api/demo/status` (any logged-in user). **Poll every 2 s while `running`**, every 10 s otherwise.
 - `GET /api/demo/accounts` (**no token**): the accounts of the project currently loaded.

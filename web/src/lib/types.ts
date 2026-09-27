@@ -171,6 +171,10 @@ export type DemoStatus = {
   finished_at: string | null;
   end_reason: string | null;
   cast: UserRef[];
+  /** People whose own agents work their tasks live (the simulator leaves them alone). */
+  real: UserRef[];
+  /** Who can be picked as a real agent for the Lumen demo. */
+  available_cast: UserRef[];
   progress: { done: number; total: number } | null;
   waiting_for_approval: { id: string; title: string }[];
   log: string[];

@@ -35,7 +35,7 @@ export function createApp(db: DB) {
   };
 
   app.get("/api/health", (_req, res) => { res.json({ ok: true }); });
-  app.get("/", (req, res) => { res.type("html").send(statusPage(db, `${req.protocol}://${req.get("host")}`)); });
+  app.get("/", (req, res) => { res.type("html").send(statusPage(db, `${req.protocol}://${req.get("host")}`, demoStatus(db).available_cast)); });
   app.post("/api/auth/login", (req, res) => send(res, () => S.login(db, req.body?.email, req.body?.password)));
 
   // DEMO ONLY: who can log in (no passwords); lets the login screen list the current project's people.

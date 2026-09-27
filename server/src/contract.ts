@@ -86,6 +86,8 @@ export const DemoStatus = z.object({
   projects: z.array(z.string()),
   running: z.boolean(), project: z.string().nullable(), started_at: iso.nullable(), finished_at: iso.nullable(), end_reason: z.string().nullable(),
   cast: z.array(UserRef),
+  real: z.array(UserRef),
+  available_cast: z.array(UserRef),
   progress: z.object({ done: z.number(), total: z.number() }).nullable(),
   waiting_for_approval: z.array(z.object({ id: z.string(), title: z.string() })),
   log: z.array(z.string()),

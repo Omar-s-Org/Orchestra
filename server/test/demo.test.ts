@@ -5,6 +5,8 @@ import { reset } from "../src/seed.js";
 import { createApp } from "../src/http.js";
 import { resetDemoState } from "../src/demo-runner.js";
 import * as S from "../src/service.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 let server: Server | undefined;
 afterEach(() => { resetDemoState(); server?.close(); });
@@ -51,6 +53,44 @@ describe("Run demo button", () => {
     expect(finished).toBe(true);
     const end = await json(await fetch(`${base}/api/demo/status`, { headers: auth(pm) }));
     expect(end).toMatchObject({ running: false, end_reason: "complete: every task is done", progress: { done: 10, total: 10 } });
+  }, 30_000);
+
+  it("live demo: Hassan's real agent works his task over MCP while the others are simulated; the PM reads it and approves", async () => {
+    const db = openDb(":memory:"); reset(db);
+    const base = await start(db);
+    const login = async (email: string) => (await json(await fetch(`${base}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "demo1234" }) }))).token as string;
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}`, "Content-Type": "application/json" });
+    const pm = await login("layla@northwind.test");
+    const before = await json(await fetch(`${base}/api/demo/status`, { headers: auth(pm) }));
+    expect(before.available_cast.map((u: { id: string }) => u.id).sort()).toEqual(["hassan", "john", "omar", "priya"]);
+    expect((await fetch(`${base}/api/demo/run`, { method: "POST", headers: auth(pm), body: JSON.stringify({ project: "lumen", real: ["nobody"] }) })).status).toBe(400);
+    const started = await json(await fetch(`${base}/api/demo/run`, { method: "POST", headers: auth(pm), body: JSON.stringify({ project: "lumen", speed: 0, real: ["hassan"] }) }));
+    expect(started.real.map((u: { id: string }) => u.id)).toEqual(["hassan"]);
+
+    // Wave 1: the three simulated agents submit; Hassan's T-8 is left alone.
+    const status = (id: string) => (db.prepare("SELECT status FROM tasks WHERE id=?").get(id) as { status: string }).status;
+    expect(await until(() => ["T-5", "T-6", "T-7"].every(id => status(id) === "review"))).toBe(true);
+    await new Promise(r => setTimeout(r, 300));
+    expect(status("T-8")).toBe("todo");
+
+    // Hassan's own agent (any MCP client, here the SDK like Claude Code) does T-8.
+    const agent = new Client({ name: "claude-code", version: "1" });
+    await agent.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { Authorization: "Bearer ak_hassan", "X-Agent-Name": "Hassan's Claude Code" } } }));
+    const call = async (name: string, args: Record<string, unknown> = {}) => JSON.parse(((await agent.callTool({ name, arguments: args })) as any).content[0].text);
+    expect((await call("next_task")).task.id).toBe("T-8");
+    await call("start_task", { task_id: "T-8", plan: "Set up CI with GitHub Actions and a staging deploy." });
+    await call("report_progress", { task_id: "T-8", summary: "A CI agent wrote the workflow; tests run on every push.", agents_used: ["CI agent"], cost_usd: 0.4 });
+    const sub = await call("submit_task", { task_id: "T-8", explanation: "CI runs lint and tests on every push; main deploys to staging automatically. Built live by Hassan's Claude Code.", agents_used: ["CI agent", "deploy agent"], cost_usd: 0.6 });
+    expect(sub).toMatchObject({ ok: true, id: "T-8", status: "review" });
+    await agent.close();
+
+    // The PM sees it in the review queue with the agent's explanation, and approves it.
+    const ov = await json(await fetch(`${base}/api/overview`, { headers: auth(pm) }));
+    const item = ov.review_queue.find((r: { id: string }) => r.id === "T-8");
+    expect(item.latest_completion).toMatchObject({ agent_name: "Hassan's Claude Code", via: "agent", summary: expect.stringMatching(/Built live by Hassan/) });
+    expect((await fetch(`${base}/api/tasks/T-8/approve`, { method: "POST", headers: auth(pm), body: "{}" })).status).toBe(200);
+    const live = await json(await fetch(`${base}/api/agents/live`, { headers: auth(pm) }));
+    expect(live.some((a: { agent_name: string }) => a.agent_name === "Hassan's Claude Code")).toBe(true);
   }, 30_000);
 
   it("Stop ends a running demo", async () => {

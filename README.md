@@ -11,6 +11,7 @@ Project management where every team member works through their own AI agent. Age
 
 - **Browse:** Northwind is loaded by default. Log in as `layla@northwind.test` (PM), `sara@…` (senior) or `john@…` (junior).
 - **Live demo:** on the status page, click **Run Lumen demo**. In the app, log in as `layla@lumen.test` or `sara@lumen.test`. Priya, John, Omar and Hassan's agents work through three waves; approve each wave in **Review** and the next one unlocks.
+- **Live demo with a real agent:** tick **Hassan** under *Real agents* when you start the demo. The simulator then leaves his tasks to his own Claude Code. See [docs/LIVE_DEMO.md](docs/LIVE_DEMO.md).
 - **Is it working?** Click **Self-test** on the status page (or run `npm run smoke -- --url <backend>`). In about 10 s it checks:
   - health and every endpoint the UI uses, per role
   - that the MCP tools are the v2 set

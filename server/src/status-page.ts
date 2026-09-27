@@ -5,7 +5,7 @@ import type { DB } from "./db.js";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-export function statusPage(db: DB, baseUrl: string) {
+export function statusPage(db: DB, baseUrl: string, cast: { id: string; name: string }[] = []) {
   const project = db.prepare("SELECT name, description FROM projects LIMIT 1").get() as { name: string; description: string } | undefined;
   const counts = Object.fromEntries((db.prepare("SELECT status, COUNT(*) AS n FROM tasks GROUP BY status").all() as { status: string; n: number }[]).map(r => [r.status, r.n]));
   const commit = (process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.RENDER_GIT_COMMIT ?? "local").slice(0, 7);
@@ -37,6 +37,8 @@ a{color:var(--acc)}#out{white-space:pre-wrap;font:13px/1.5 ui-monospace,monospac
 <button class="primary" data-act="load" data-project="northwind">Load Northwind</button>
 <button class="primary" data-act="run">Run Lumen demo (4 agents)</button>
 <button data-act="stop">Stop demo</button>
+<div style="margin:4px 0 8px" class="mute">Real agents (the simulator leaves their tasks alone, so their own Claude Code works them over MCP):
+${cast.map(c => `<label style="margin-right:12px;white-space:nowrap"><input type="checkbox" name="real" value="${esc(c.id)}"> ${esc(c.name)}</label>`).join("")}</div>
 <button data-act="selftest">Self-test (≈10 s)</button>
 <p class="mute" style="margin:6px 0 0">Load and Run replace the shared demo data. Self-test runs the whole demo at full speed and checks every step, then loads Northwind again. Run it on the backup server during a live demo.</p>
 <div id="out"></div></div>
@@ -74,7 +76,11 @@ document.querySelectorAll("button").forEach(b => b.onclick = async () => {
   try {
     const t = await withPm(async t => { await api("/api/demo/status", t); return t; });
     if (act === "load") { const r = await api("/api/demo/load", t, { project: b.dataset.project }); say("Loaded " + r.loaded.project + ": " + r.loaded.tasks + " tasks, " + r.loaded.people + " people."); }
-    if (act === "run") { await api("/api/demo/run", t, { project: "lumen" }); say("Lumen demo started. Open the app, sign in as the PM (layla@lumen.test) or Sara, and approve each wave in Review."); }
+    if (act === "run") {
+      const real = [...document.querySelectorAll('input[name="real"]:checked')].map(x => x.value);
+      await api("/api/demo/run", t, { project: "lumen", real });
+      say("Lumen demo started" + (real.length ? " with real agents for: " + real.join(", ") + ". Their tasks wait for their own Claude Code." : ".") + " Open the app, sign in as the PM (layla@lumen.test) or Sara, and approve each wave in Review.");
+    }
     if (act === "stop") { await api("/api/demo/stop", t, {}); say("Demo stopped."); }
     if (act === "selftest") { const r = await api("/api/demo/selftest", t, {}); say(r.steps.map(s => (s.ok ? "✓ " : "✗ ") + s.name + " (" + (s.ms / 1000).toFixed(1) + " s)" + (s.detail ? "\\n    " + s.detail : "")).join("\\n") + "\\n\\n" + (r.ok ? "Everything works." : "Self-test FAILED.")); }
   } catch (e) { say("Error: " + e.message); }
