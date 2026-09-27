@@ -150,3 +150,17 @@ export type DemoAccount = {
   department: string;
   title: string | null;
 };
+
+/** GET /api/demo/status (LOVABLE_PLAN §12). */
+export type DemoStatus = {
+  projects: string[];
+  running: boolean;
+  project: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  end_reason: string | null;
+  cast: UserRef[];
+  progress: { done: number; total: number } | null;
+  waiting_for_approval: { id: string; title: string }[];
+  log: string[];
+};

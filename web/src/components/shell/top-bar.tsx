@@ -13,6 +13,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { overviewQuery } from "@/lib/queries";
 import type { Me } from "@/lib/types";
 
+import { DemoControl } from "./demo-control";
 import { LiveAgentsList, useActiveAgentCount } from "./live-agents";
 import { UserMenu } from "./user-menu";
 
@@ -81,6 +82,7 @@ export function TopBar({ me }: { me: Me }) {
             </TooltipProvider>
           </div>
         ) : null}
+        <DemoControl me={me} />
         <SourcePill />
         <Sheet>
           <SheetTrigger asChild>

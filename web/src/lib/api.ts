@@ -20,6 +20,7 @@ import type {
   TaskSummary,
   Update,
   DemoAccount,
+  DemoStatus,
 } from "./types";
 
 import { API_BASES } from "./config";
@@ -268,6 +269,10 @@ export const api = {
   kbDoc: (id: string) => request<KbDoc>("GET", `/api/kb/${id}`),
   /** Public: the accounts of the project the backend has loaded (login quick-fill). */
   demoAccounts: () => request<DemoAccount[]>("GET", "/api/demo/accounts"),
+  /** Run demo (LOVABLE_PLAN §12): status for anyone logged in; run/stop are PM only. */
+  demoStatus: () => request<DemoStatus>("GET", "/api/demo/status"),
+  demoRun: () => request<DemoStatus>("POST", "/api/demo/run", { project: "lumen", speed: 1 }),
+  demoStop: () => request<DemoStatus>("POST", "/api/demo/stop", {}),
 };
 
 /** Artifact URLs: relative paths are served by the backend with the token. */
