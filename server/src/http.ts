@@ -63,8 +63,6 @@ export function createApp(db: DB) {
   r.get("/me/agent-key", h((c, req) => S.agentKey(c, `${req.protocol}://${req.get("host")}`)));
   r.get("/tasks", h((c, req) => S.listTasks(c, { status: q(req, "status"), department: q(req, "department"), person: q(req, "person"), mine: q(req, "mine") === "true" })));
   r.get("/tasks/:id", h((c, req) => S.getTask(c, p(req, "id"))));
-  r.post("/tasks/:id/approve", h((c, req) => S.approveTask(c, p(req, "id"), req.body?.note)));
-  r.post("/tasks/:id/reopen", h((c, req) => S.reopenTask(c, p(req, "id"), req.body?.note)));
   r.get("/activity", h((c, req) => S.activity(c, { limit: Number(q(req, "limit")), task: q(req, "task"), via: q(req, "via"), kind: q(req, "kind") })));
   r.get("/agents/live", h(c => S.liveAgents(c)));
   r.get("/overview", h(c => S.overview(c)));

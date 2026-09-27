@@ -1,6 +1,6 @@
 // "Run demo": load a demo project and let its simulated team (real MCP clients, see sim/) work it
-// inside this server process. Humans approve finished work in the UI; each approval unlocks the next
-// wave. The run stops by itself when every scripted task is done, after 15 minutes, or on Stop.
+// inside this server process. Finished tasks unlock the next ones automatically; a senior or the PM
+// approves the finished milestone in the UI. The run stops when every scripted task is done, at the time limit, or on Stop.
 import fs from "node:fs";
 import path from "node:path";
 import type { DB } from "./db.js";
@@ -62,12 +62,14 @@ export function startDemo(db: DB, selfUrl: string, opts: { project?: string; spe
   if (!/^[a-z0-9-]+$/.test(project) || !demoProjects().includes(project))
     throw new BadRequest(`Unknown demo project "${project}". Available: ${demoProjects().join(", ")}`);
   const speed = Math.min(Math.max(Number(opts.speed ?? 1) || 0, 0), 5);
-  const { file, taskIds, cast } = castOf(project);
+  const { file, spec, taskIds, cast } = castOf(project);
   if (!taskIds.length || !cast.length) throw new BadRequest(`Demo project "${project}" has no simulator stories that match its tasks`);
   const real = [...new Set(Array.isArray(opts.real) ? opts.real.map(String) : [])];
   const unknown = real.filter(id => !cast.includes(id));
   if (unknown.length) throw new BadRequest(`Not in the demo cast: ${unknown.join(", ")}. Cast: ${cast.join(", ")}`);
-  const simulated = cast.filter(id => !real.includes(id));
+  // A real person's first scripted task is theirs to do live; the simulator covers their later tasks once
+  // it is done, so the milestone can still finish and be approved on camera.
+  const handsOff = real.map(id => spec.tasks.find(t => taskIds.includes(t.id) && t.workers[0] === id)!.id);
 
   reset(db, file);
   const stop = new AbortController();
@@ -75,15 +77,25 @@ export function startDemo(db: DB, selfUrl: string, opts: { project?: string; spe
   current = run;
   const log = (line: string) => { run.log.push(line); if (run.log.length > LOG_LINES) run.log.shift(); };
 
-  if (real.length) log(`Real agents (not simulated): ${real.join(", ")}. Their tasks wait for their own agents.`);
-  // Agents re-check for newly unlocked work every 3 s, so an approval is picked up almost immediately.
-  if (simulated.length) runSim({ baseUrl: selfUrl, projectFile: file, people: simulated, speed, loop: true, heartbeatMs: speed === 0 ? 50 : 3000, signal: stop.signal, log })
-    .then(r => log(`Agents went offline (${r.submitted} task(s) submitted).`))
+  if (real.length) log(`Real agents: ${real.join(", ")}. Waiting for their own agents on ${handsOff.join(", ")}.`);
+  // Agents re-check for newly unlocked work every 3 s, so finished prerequisites are picked up almost immediately.
+  const sim = (people: string[]) => runSim({ baseUrl: selfUrl, projectFile: file, people, handsOff, speed, loop: true, heartbeatMs: speed === 0 ? 50 : 3000, signal: stop.signal, log })
+    .then(r => log(`Agents went offline (${r.submitted} task(s) completed).`))
     .catch(e => { log(`Simulator error: ${(e as Error).message}`); if (current === run) finish("error"); });
+  const simulated = cast.filter(id => !real.includes(id));
+  if (simulated.length) void sim(simulated);
+  // A real person's stand-in only comes online after their live task is done, so it never shows up
+  // in the live view (or heartbeats as them) while their real agent is working.
+  let standInsStarted = real.length === 0;
 
   run.watcher = setInterval(() => {
     if (current !== run) return;
     try {
+      if (!standInsStarted && handsOff.every(id => (db.prepare("SELECT status FROM tasks WHERE id=?").get(id) as { status: string } | undefined)?.status === "done")) {
+        standInsStarted = true;
+        log(`${real.join(", ")} finished ${handsOff.join(", ")} live; the simulator takes over their remaining tasks.`);
+        void sim(real);
+      }
       const open = (db.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE status != 'done' AND id IN (${taskIds.map(() => "?").join(",")})`).get(...taskIds) as { n: number }).n;
       if (open === 0) finish("complete: every task is done");
       else if (Date.now() - Date.parse(run.startedAt) > (run.real.length ? MAX_RUN_REAL_MS : MAX_RUN_MS)) finish(`time limit (${run.real.length ? 60 : 15} min)`);
@@ -128,6 +140,7 @@ export function demoStatus(db: DB) {
   };
   if (!run) return { ...base, running: false, project: null, started_at: null, finished_at: null, end_reason: null, cast: [], real: [], progress: null, waiting_for_approval: [], log: [] };
   const ids = run.taskIds;
+  if (!ids.length) return { ...base, running: false, project: run.project, started_at: run.startedAt, finished_at: run.finishedAt, end_reason: run.endReason, cast: [], real: [], progress: null, waiting_for_approval: [], log: run.log.slice(-20) };
   const rows = ids.length ? db.prepare(`SELECT id, title, status FROM tasks WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as { id: string; title: string; status: string }[] : [];
   return {
     ...base,
@@ -135,7 +148,10 @@ export function demoStatus(db: DB) {
     cast: run.cast.map(id => users.find(u => u.id === id)).filter(Boolean),
     real: run.real.map(id => users.find(u => u.id === id)).filter(Boolean),
     progress: { done: rows.filter(r => r.status === "done").length, total: ids.length },
-    waiting_for_approval: rows.filter(r => r.status === "review").map(r => ({ id: r.id, title: r.title })),
+    // Milestones of this demo whose tasks are all done and that nobody has approved yet.
+    waiting_for_approval: (db.prepare(`SELECT m.id, m.name AS title FROM milestones m JOIN tasks t ON t.milestone_id = m.id
+      WHERE m.approved_at IS NULL AND m.id IN (SELECT DISTINCT milestone_id FROM tasks WHERE id IN (${ids.map(() => "?").join(",")}))
+      GROUP BY m.id HAVING SUM(t.status != 'done') = 0`).all(...ids) as { id: string; title: string }[]),
     log: run.log.slice(-20),
   };
 }

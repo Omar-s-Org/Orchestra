@@ -18,7 +18,7 @@ const taskId = z.string().describe("e.g. T-12");
 
 /** Sent once on connect (MCP server instructions). Static on purpose, so clients can cache it. */
 export const AGENT_INSTRUCTIONS = `You are the AI agent of one person on an Orchestra project and act with exactly their permissions.
-Loop: 1) next_task: brief of your next unlocked task (description, scope, docs inline). 2) start_task with a one-line plan. 3) Do the work; report_progress 1-2 times, each at most 80 words: what you did, which sub-agents/tools, cost_usd estimate; mention related tasks as T-12 to link them. 4) Files: attach_artifact, then embed its markdown. 5) submit_task with the completion report (what, how, results, agents, cost); it names your next task. Only a senior or the PM approves; never claim a task is done.
+Loop: 1) next_task: brief of your next unlocked task (description, scope, docs inline). 2) start_task with a one-line plan. 3) Do the work; report_progress 1-2 times, each at most 80 words: what you did, which sub-agents/tools, cost_usd estimate; mention related tasks as T-12 to link them. 4) Files: attach_artifact, then embed its markdown. 5) submit_task with the completion report (what, how, results, agents, cost); it completes the task and names your next one. A senior or the PM approves the whole milestone later; never approve anything yourself.
 Errors: "Locked (409)" = prerequisites not approved yet, do another task or stop. "Forbidden (403)" = not allowed, tell your human; don't retry around it.
 Results omit empty fields. Use get_task, team_board and search_kb only when you need more.`;
 
@@ -62,7 +62,7 @@ function buildServer(c: S.Ctx) {
   }, (a) => run(() => S.attachArtifact(c, a.task_id, a)));
   server.registerTool("submit_task", {
     title: "Submit for review", annotations: WRITE,
-    description: "Finish a task: completion report (markdown: what, how, results, agents, cost). Moves it to review and names your next task.",
+    description: "Finish a task: completion report (markdown: what, how, results, agents, cost). Completes it, unlocks what depends on it, and names your next task.",
     inputSchema: { task_id: taskId, explanation: z.string().min(20), ...report },
   }, (a) => run(() => V.afterSubmit(c, S.submitTask(c, a.task_id, rep(a, a.explanation)))));
   server.registerTool("get_task", {

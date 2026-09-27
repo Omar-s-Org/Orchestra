@@ -66,25 +66,14 @@ export async function runSelfTest(baseUrl: string, opts: { password?: string; ti
     } finally { await client.close(); }
   });
 
-  await step("Four agents finish the beta milestone; a human approves each wave", async () => {
+  await step("Four agents finish the beta milestone on their own", async () => {
     must(await call("/api/demo/run", pm, { project: "lumen", speed: 0 }), "run demo");
     const end = Date.now() + (opts.timeoutMs ?? 90_000);
-    let juniorChecked = false, approved = 0;
     while (Date.now() < end) {
       const s = must(await call("/api/demo/status", pm), "status");
-      for (const w of s.waiting_for_approval as { id: string }[]) {
-        if (!juniorChecked) {
-          const r = await call(`/api/tasks/${w.id}/approve`, junior, {});
-          if (r.status !== 403) throw new Error(`a junior could approve ${w.id} (HTTP ${r.status})`);
-          juniorChecked = true;
-        }
-        const r = await call(`/api/tasks/${w.id}/approve`, senior, {});
-        if (r.status !== 200) must(await call(`/api/tasks/${w.id}/approve`, pm, {}), `approve ${w.id}`);
-        approved++;
-      }
       if (!s.running) {
         if (!String(s.end_reason).startsWith("complete")) throw new Error(`demo ended: ${s.end_reason}`);
-        return `${s.progress.done}/${s.progress.total} tasks done, ${approved} approvals, junior approval refused`;
+        return `${s.progress.done}/${s.progress.total} tasks done, no task-level approvals needed`;
       }
       await new Promise(r => setTimeout(r, 300));
     }
@@ -92,14 +81,15 @@ export async function runSelfTest(baseUrl: string, opts: { password?: string; ti
     throw new Error("timed out");
   });
 
-  await step("The PM signs off the finished milestone", async () => {
-    const ov = must(await call("/api/overview", pm), "overview");
-    const ready = (ov.milestones as { id: string; name: string; ready_for_signoff: boolean }[]).filter(m => m.ready_for_signoff);
-    if (!ready.length) throw new Error("no milestone is ready for sign-off after the demo");
-    const r = await call(`/api/milestones/${ready[0].id}/approve`, senior, {});
-    if (r.status !== 403) throw new Error(`a senior could sign off (HTTP ${r.status})`);
-    must(await call(`/api/milestones/${ready[0].id}/approve`, pm, {}), `sign off ${ready[0].id}`);
-    return `${ready[0].name} signed off; a senior's sign-off was refused`;
+  await step("The finished milestone is approved (a junior is refused, the senior approves)", async () => {
+    const ov = must(await call("/api/overview", senior), "overview");
+    const ready = (ov.milestones as { id: string; name: string; ready_for_signoff: boolean; can_approve: boolean }[]).filter(m => m.ready_for_signoff);
+    if (!ready.length) throw new Error("no milestone is ready for approval after the demo");
+    const m = ready.find(x => x.can_approve) ?? ready[0];
+    const r = await call(`/api/milestones/${m.id}/approve`, junior, {});
+    if (r.status !== 403) throw new Error(`a junior could approve ${m.id} (HTTP ${r.status})`);
+    must(await call(`/api/milestones/${m.id}/approve`, m.can_approve ? senior : pm, {}), `approve ${m.id}`);
+    return `${m.name} approved by the ${m.can_approve ? "senior" : "PM"}; a junior's approval was refused`;
   });
 
   await step("Put the Northwind demo back", async () => {

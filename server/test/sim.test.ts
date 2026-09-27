@@ -28,20 +28,19 @@ describe("simulated agents", () => {
     for (const id of Object.keys(loadStories(DEFAULT_PROJECT))) expect(status(db, id), id).toBeTruthy();
   });
 
-  it("John, Priya and Mia work their unlocked tasks over MCP; locked ones wait for approval", async () => {
+  it("John, Priya and Mia work their unlocked tasks over MCP; locked ones wait for their prerequisites", async () => {
     const db = openDb(":memory:"); reset(db);
     const lines: string[] = [];
     const base = await start(db);
     const r = await runSim({ baseUrl: base, speed: 0, log: l => lines.push(l) });
 
-    // T-9 waits on T-5 and T-13 on T-8/T-9: prerequisites must be approved (done) first.
-    expect(r.submitted).toBe(3);
-    for (const id of ["T-4", "T-5", "T-11"]) expect(status(db, id)).toBe("review");
-    for (const id of ["T-9", "T-13"]) expect(status(db, id)).toBe("todo");
-    expect(lines.some(l => l.includes("T-9 waiting: locked until T-5"))).toBe(true);
+    // Submitting completes a task; T-9 (waits on T-5) may be picked up in this run or the next.
+    expect(r.submitted).toBeGreaterThanOrEqual(3);
+    for (const id of ["T-4", "T-5", "T-11"]) expect(status(db, id)).toBe("done");
     // Updates carry the agent name, agents used and cost; the chart is embedded in the completion.
-    const done = db.prepare("SELECT agent_name, agents_used, cost_usd, summary FROM task_updates WHERE task_id='T-5' AND kind='completion' ORDER BY id DESC").get() as { agent_name: string; agents_used: string; cost_usd: number; summary: string };
+    const done = db.prepare("SELECT agent_name, agents_used, cost_usd, summary, status_to FROM task_updates WHERE task_id='T-5' AND kind='completion' ORDER BY id DESC").get() as { agent_name: string; agents_used: string; cost_usd: number; summary: string; status_to: string };
     expect(done.agent_name).toBe("John's Claude");
+    expect(done.status_to).toBe("done");
     expect(JSON.parse(done.agents_used)).toContain("data agent");
     expect(done.cost_usd).toBeGreaterThan(0);
     expect(done.summary).toMatch(/!\[reco-precision\.svg\]\(\/api\/artifacts\/[0-9a-f]{16}\)/);
@@ -49,39 +48,30 @@ describe("simulated agents", () => {
     // Nothing was refused along the way.
     expect(lines.filter(l => l.includes("skipped"))).toEqual([]);
 
-    // Sara approves T-5 → T-9 unlocks, and the next run picks it up. T-9 has two workers; only Mia drives it.
-    const before = lastUpdateId(db);
-    const sara = await (await fetch(`${base}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "sara@northwind.test", password: "demo1234" }) })).json();
-    expect((await fetch(`${base}/api/tasks/T-5/approve`, { method: "POST", headers: { Authorization: `Bearer ${sara.token}` } })).status).toBe(200);
-    expect((await runSim({ baseUrl: base, speed: 0, log: () => {} })).submitted).toBe(1);
-    expect(status(db, "T-9")).toBe("review");
-    expect(db.prepare("SELECT DISTINCT user_id FROM task_updates WHERE task_id='T-9' AND id > ?").all(before)).toEqual([{ user_id: "mia" }]);
+    // T-5 is done, so T-9 is unlocked: a second run finishes it. T-9 has two workers; only Mia drives it.
+    await runSim({ baseUrl: base, speed: 0, log: () => {} });
+    expect(status(db, "T-9")).toBe("done");
+    expect(db.prepare("SELECT DISTINCT user_id FROM task_updates WHERE task_id='T-9' AND via='agent'").all()).toEqual([{ user_id: "mia" }]);
   });
 
   it("--loop keeps agents online, picks up tasks the moment they unlock, and re-works after a reset", async () => {
     const db = openDb(":memory:"); reset(db);
     const stop = new AbortController();
     const run = runSim({ baseUrl: await start(db), speed: 0, loop: true, heartbeatMs: 50, signal: stop.signal, log: () => {} });
-    const inReview = (ids: string[]) => () => ids.every(id => status(db, id) === "review");
-    const unlocked = inReview(["T-4", "T-5", "T-11"]);
+    const allDone = (ids: string[]) => () => ids.every(id => status(db, id) === "done");
     const seen = () => (db.prepare("SELECT last_seen FROM agent_sessions WHERE user_id='john'").get() as { last_seen: string } | undefined)?.last_seen ?? "";
 
-    expect(await until(unlocked)).toBe(true);
-    expect(status(db, "T-9")).toBe("todo"); // locked behind T-5 (in review, not done)
+    // T-9 unlocks as soon as T-5 is submitted, and Mia's looping agent picks it up with no human step.
+    expect(await until(allDone(["T-4", "T-5", "T-11", "T-9"]))).toBe(true);
     const firstSeen = seen();
     expect(await until(() => seen() > firstSeen)).toBe(true); // heartbeat after the work is done
 
-    // Sara approves T-5 → T-9 unlocks → Mia's looping agent picks it up on its next heartbeat.
-    const sara = db.prepare("SELECT id, name, role, department FROM users WHERE id='sara'").get() as S.Ctx["user"];
-    S.approveTask({ db, user: sara, via: "ui" }, "T-5");
-    expect(await until(inReview(["T-9"]))).toBe(true);
-
     reset(db); // "Reset demo": tasks are open again
     expect(status(db, "T-5")).toBe("in_progress");
-    expect(await until(unlocked)).toBe(true);
+    expect(await until(allDone(["T-4", "T-5", "T-11"]))).toBe(true);
 
     stop.abort();
-    expect((await run).submitted).toBe(7); // 3 + T-9 + 3 after the reset
+    expect((await run).submitted).toBeGreaterThanOrEqual(7); // 4+ before the reset, 3+ after
   });
 
   it("fetches agent keys through login when the server issues random keys", async () => {
@@ -89,34 +79,32 @@ describe("simulated agents", () => {
     const db = openDb(":memory:"); reset(db);
     expect((db.prepare("SELECT agent_key FROM users WHERE id='john'").get() as { agent_key: string }).agent_key).not.toBe("ak_john");
     const r = await runSim({ baseUrl: await start(db), people: ["john"], speed: 0, log: () => {} });
-    expect(r.submitted).toBe(1); // T-5; their shared T-9 stays locked until T-5 is approved
-    expect(status(db, "T-5")).toBe("review");
+    expect(r.submitted).toBe(1); // T-5 (T-9 was still locked when John listed his work)
+    expect(status(db, "T-5")).toBe("done");
   });
 
   it("can reset the demo first, as the PM", async () => {
     const db = openDb(":memory:"); reset(db);
     const base = await start(db);
     await runSim({ baseUrl: base, people: ["john"], speed: 0, log: () => {} });
-    expect(status(db, "T-5")).toBe("review");
+    expect(status(db, "T-5")).toBe("done");
     const r = await runSim({ baseUrl: base, people: ["john"], speed: 0, reset: true, log: () => {} });
     expect(r.submitted).toBe(1); // reset put T-5 back to in_progress, so John could work it again
   });
 
-  it("Lumen demo: four agents complete the beta milestone as a human approves each wave", async () => {
+  it("Lumen demo: four agents complete the beta milestone on their own; the senior then approves the milestone", async () => {
     const db = openDb(":memory:");
     reset(db, LUMEN);
     const base = await start(db);
     const sara = db.prepare("SELECT id, name, role, department FROM users WHERE id='sara'").get() as S.Ctx["user"];
-    const approver = setInterval(() => {
-      for (const t of db.prepare("SELECT id FROM tasks WHERE status='review'").all() as { id: string }[]) S.approveTask({ db, user: sara, via: "ui" }, t.id);
-    }, 20);
     const stop = new AbortController();
     const lines: string[] = [];
     const run = runSim({ baseUrl: base, projectFile: LUMEN, speed: 0, loop: true, heartbeatMs: 30, signal: stop.signal, log: l => lines.push(l) });
     const open = () => (db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE milestone_id='M-2' AND status!='done'").get() as { n: number }).n;
     expect(await until(() => open() === 0)).toBe(true);
-    stop.abort(); clearInterval(approver);
+    stop.abort();
     expect((await run).submitted).toBe(10);
+    expect(S.approveMilestone({ db, user: sara, via: "ui" }, "M-2")).toMatchObject({ approved_by: { id: "sara" } });
     // All four simulated people did real work, and nothing was refused.
     const workers = (db.prepare("SELECT DISTINCT user_id FROM task_updates WHERE via='agent' AND task_id IN (SELECT id FROM tasks WHERE milestone_id='M-2')").all() as { user_id: string }[]).map(r => r.user_id).sort();
     expect(workers).toEqual(["hassan", "john", "omar", "priya"]);

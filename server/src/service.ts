@@ -5,7 +5,7 @@ import { type DB, now } from "./db.js";
 import { hashPassword, verifyPassword, newToken } from "./auth.js";
 import {
   type User, type Role, type Status, type Index,
-  loadIndex, canSeeTask, isWorker, canApprove, allowedActions, canReadDoc, capabilities,
+  loadIndex, canSeeTask, isWorker, canApproveMilestone, allowedActions, canReadDoc, capabilities,
   Forbidden, NotFound, BadRequest, HttpError, Locked, LEVEL,
 } from "./permissions.js";
 import { emit } from "./webhooks.js";
@@ -116,7 +116,7 @@ function makeSummary(c: Ctx, ix: Index, t: TaskRow, L: Lookup) {
     live: L.live.get(t.id) ?? null,
     cost_usd: round(L.cost.get(t.id) ?? 0),
     updated_at: t.updated_at,
-    allowed_actions: allowedActions(ix, c.user, t.id, t.status),
+    allowed_actions: allowedActions(),
   };
 }
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -225,11 +225,6 @@ export function liveAgents(c: Ctx) {
   });
 }
 
-function reviewItem(c: Ctx, ix: Index, t: TaskRow, L: Lookup) {
-  const last = c.db.prepare("SELECT * FROM task_updates WHERE task_id=? AND kind='completion' ORDER BY id DESC LIMIT 1").get(t.id) as UpdateRow | undefined;
-  return { ...makeSummary(c, ix, t, L), latest_completion: last ? presentUpdate(last, L) : null, artifacts: artifactsOf(c.db, t.id, L.ref) };
-}
-
 export function overview(c: Ctx) {
   const ix = loadIndex(c.db);
   const L = lookup(c.db);
@@ -239,6 +234,7 @@ export function overview(c: Ctx) {
   const byMilestone = new Map<string, TaskRow[]>();
   for (const t of tasks) { by_status[t.status]++; byMilestone.set(t.milestone_id, [...(byMilestone.get(t.milestone_id) ?? []), t]); }
   // Sign-off state uses every task in the milestone, not only the ones this person can see.
+  const tasksOf = milestoneTasks(c.db);
   const allOpen = new Map((c.db.prepare("SELECT milestone_id, COUNT(*) AS total, SUM(status = 'done') AS done FROM tasks GROUP BY milestone_id").all() as { milestone_id: string; total: number; done: number }[]).map(r => [r.milestone_id, r]));
   const milestones = (c.db.prepare("SELECT id, name, due, approved_at, approved_by FROM milestones ORDER BY due").all() as { id: string; name: string; due: string; approved_at: string | null; approved_by: string | null }[]).map(({ approved_at, approved_by, ...m }) => {
     const ts = byMilestone.get(m.id) ?? [];
@@ -248,9 +244,11 @@ export function overview(c: Ctx) {
       ...m, total: ts.length, done, pct: ts.length ? Math.round((done / ts.length) * 100) : 0,
       approved_at, approved_by: approved_by ? ref(approved_by) : null,
       ready_for_signoff: !approved_at && !!all && all.total > 0 && all.done === all.total,
+      can_approve: canApproveMilestone(ix, c.user, tasksOf.get(m.id) ?? []),
     };
   });
-  const review_queue = tasks.filter(t => t.status === "review" && canApprove(ix, c.user, t.id)).map(t => reviewItem(c, ix, t, L));
+  // Task-level review is gone (approval is per milestone); kept empty so older clients don't break.
+  const review_queue: never[] = [];
   let cost = null;
   if (capabilities(c.user).cost) {
     const ids = new Set(tasks.map(t => t.id));
@@ -417,12 +415,15 @@ export function submitTask(c: Ctx, id: string, r: Report) {
   return guarded(c, "submit_task", id, () => {
     const t = workerTask(c, id);
     if (t.status === "done" || t.status === "review") throw new BadRequest(`${id} is already ${t.status}`);
+    // Submitting completes the task (approval happens per milestone), so dependents unlock right away.
     c.db.transaction(() => {
-      setStatus(c, id, "review");
-      addUpdate(c, id, "completion", r, t.status, "review");
-      touchSession(c, { taskId: null, activity: `Submitted ${id} for review` });
+      setStatus(c, id, "done");
+      addUpdate(c, id, "completion", r, t.status, "done");
+      touchSession(c, { taskId: null, activity: `Completed ${id}` });
     })();
     emit(c.db, "task.submitted", { task_id: id, by: c.user.id, summary: r.summary });
+    const ms = c.db.prepare("SELECT m.id, m.name, SUM(t.status != 'done') AS open FROM milestones m JOIN tasks t ON t.milestone_id = m.id WHERE m.id = (SELECT milestone_id FROM tasks WHERE id=?) GROUP BY m.id").get(id) as { id: string; name: string; open: number } | undefined;
+    if (ms && ms.open === 0) emit(c.db, "milestone.ready", { milestone_id: ms.id, name: ms.name, completed_by_task: id });
     return getTask(c, id);
   });
 }
@@ -455,32 +456,6 @@ export function nextTask(c: Ctx) {
   };
 }
 
-// ---------- human writes (UI) ----------
-export function approveTask(c: Ctx, id: string, note?: string) {
-  return guarded(c, "approve", id, () => {
-    const ix = loadIndex(c.db);
-    const t = visibleTask(c, ix, id);
-    if (!canApprove(ix, c.user, id)) throw new Forbidden(c.user.role === "junior" ? "Juniors (and their agents) can't approve tasks; a senior or the PM must." : `${c.user.name} can't approve ${id}`);
-    if (t.status !== "review") throw new BadRequest(`${id} is ${t.status}; only tasks in review can be approved`);
-    c.db.transaction(() => { setStatus(c, id, "done"); addUpdate(c, id, "approval", { summary: note?.trim() || "Approved" }, "review", "done"); })();
-    emit(c.db, "task.approved", { task_id: id, by: c.user.id });
-    return getTask(c, id);
-  });
-}
-
-export function reopenTask(c: Ctx, id: string, note: string) {
-  if (!note?.trim()) throw new BadRequest("A note is required when sending work back");
-  return guarded(c, "reopen", id, () => {
-    const ix = loadIndex(c.db);
-    const t = visibleTask(c, ix, id);
-    if (!canApprove(ix, c.user, id)) throw new Forbidden(`${c.user.name} can't send ${id} back`);
-    if (t.status !== "review") throw new BadRequest(`${id} is ${t.status}; only tasks in review can be sent back`);
-    c.db.transaction(() => { setStatus(c, id, "in_progress"); addUpdate(c, id, "status", { summary: note }, "review", "in_progress"); })();
-    emit(c.db, "task.status_changed", { task_id: id, from: "review", to: "in_progress", by: c.user.id });
-    return getTask(c, id);
-  });
-}
-
 // ---------- PM setup ----------
 function requirePm(c: Ctx) { if (c.user.role !== "pm") throw new Forbidden("Only the PM can do this"); }
 
@@ -491,12 +466,20 @@ function nextId(db: DB, table: "milestones" | "kb_docs", prefix: string) {
   return `${prefix}${max + 1}`;
 }
 
-/** The PM signs off a milestone once every task in it is done (approved). */
+/** Task ids per milestone. */
+function milestoneTasks(db: DB) {
+  const m = new Map<string, string[]>();
+  for (const r of db.prepare("SELECT id, milestone_id FROM tasks").all() as { id: string; milestone_id: string }[]) m.set(r.milestone_id, [...(m.get(r.milestone_id) ?? []), r.id]);
+  return m;
+}
+
+/** The PM (any milestone) or a senior (milestones fully in their department) approves a milestone once every task in it is done. */
 export function approveMilestone(c: Ctx, id: string, note?: string) {
   return guarded(c, "approve_milestone", id, () => {
-    if (c.user.role !== "pm") throw new Forbidden("Only the PM can sign off a milestone");
     const m = c.db.prepare("SELECT id, name, approved_at FROM milestones WHERE id=?").get(id) as { id: string; name: string; approved_at: string | null } | undefined;
     if (!m) throw new NotFound(`Milestone ${id} not found`);
+    if (!canApproveMilestone(loadIndex(c.db), c.user, milestoneTasks(c.db).get(id) ?? []))
+      throw new Forbidden(c.user.role === "junior" ? "Juniors (and their agents) can't approve milestones; a senior or the PM must." : `${c.user.name} can only approve milestones whose tasks are all in ${c.user.department}`);
     if (m.approved_at) throw new BadRequest(`${m.name} is already signed off`);
     const open = c.db.prepare("SELECT id, status FROM tasks WHERE milestone_id=? AND status != 'done' ORDER BY id").all(id) as { id: string; status: string }[];
     const total = (c.db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE milestone_id=?").get(id) as { n: number }).n;
