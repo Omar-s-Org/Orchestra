@@ -3,7 +3,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { Building2, Info, Moon, Sun } from "lucide-react";
 
 import { Logo } from "@/components/logo";
-import { SourcePill } from "@/components/source-pill";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -87,7 +86,6 @@ export function TopBar({ me }: { me: Me }) {
           </div>
         ) : null}
         <DemoControl me={me} />
-        <SourcePill />
         <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle dark mode">
           {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>

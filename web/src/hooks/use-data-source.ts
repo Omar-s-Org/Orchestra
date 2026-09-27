@@ -40,11 +40,8 @@ export function useSourceMonitor() {
     const unsubscribe = onSourceFlip((next) => {
       // Only auto mode switches the data itself; off mode just reflects health in the pill.
       if (getMockMode() === "auto") void queryClient.resetQueries();
-      if (next === "mock") {
-        toast.warning("Backend offline, showing mock data");
-      } else {
-        toast.success("Connected to live backend");
-      }
+      // Only the bad news is worth a toast; being connected is the normal state.
+      if (next === "mock") toast.warning("Backend offline, showing mock data");
     });
     return () => {
       unsubscribe();

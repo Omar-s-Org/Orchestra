@@ -1,11 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/logo";
-import { SourcePill } from "@/components/source-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,10 +51,15 @@ function LoginPage() {
   });
   const accounts =
     source === "live" && liveAccounts.data?.length ? liveAccounts.data : DEMO_ACCOUNTS;
-  // Pre-fill the project manager of whichever project is loaded (layla@lumen.test after Run demo).
-  const pmEmail = accounts.find((a) => a.role === "pm")?.email;
+  // Pre-fill the project manager of whichever project the server has loaded (layla@lumen.test after a
+  // reset). Replace an earlier pre-fill when the real list arrives, but never what the user typed.
+  const pmEmail = (source === "live" && liveAccounts.isPending ? [] : accounts).find((a) => a.role === "pm")?.email;
+  const prefilled = useRef("");
   useEffect(() => {
-    if (pmEmail) setEmail((current) => current || pmEmail);
+    if (!pmEmail) return;
+    const previous = prefilled.current;
+    prefilled.current = pmEmail;
+    setEmail((current) => (current === "" || current === previous ? pmEmail : current));
   }, [pmEmail]);
 
   // Already signed in: go straight to the landing page.
@@ -94,7 +98,6 @@ function LoginPage() {
               <p className="text-xs text-muted-foreground">AI agents, one live project</p>
             </div>
           </div>
-          <SourcePill />
         </div>
 
         <div className="rounded-xl border bg-card p-6 shadow-float">
