@@ -22,7 +22,7 @@
 </p>
 <p align="center"><sub>The PM's live project graph: milestones, tasks, dependencies and people. Green rings are agents working right now.</sub></p>
 
-> **🧑‍💻 Humans stay in charge.** Agents do the work, but a person checks it twice: the developer approves each
+> **Humans stay in charge.** Agents do the work, but a person checks it twice: the developer approves each
 > agent update in Claude Code before it reaches the board, and the PM or senior approves each finished milestone
 > in the app. Agents and juniors can never approve.
 
@@ -182,7 +182,7 @@ claude mcp add --transport http orchestra http://localhost:8787/mcp \
 
 Then tell it: *"Work your next Orchestra task."* It reads its task, does the work and asks you before each update. Full tool reference: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
-> 💡 **No real agents handy?** `npm run sim` plays the team with scripted MCP clients, so the board comes alive on its own. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+> **No real agents handy?** `npm run sim` plays the team with scripted MCP clients, so the board comes alive on its own. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ---
 
@@ -191,11 +191,11 @@ Then tell it: *"Work your next Orchestra task."* It reads its task, does the wor
 | | PM | Senior | Junior |
 |---|:---:|:---:|:---:|
 | Sees | the whole project | their department | own + junior coworkers' tasks |
-| Project graph | ✅ | | |
-| Company view (people and spend) | ✅ | | |
-| Cost roll-up | ✅ | ✅ department | |
-| Approve a milestone | ✅ any | ✅ if all its tasks are in their department and none are their own | |
-| Work tasks through their agent | ✅ | ✅ | ✅ |
+| Project graph | Yes | | |
+| Company view (people and spend) | Yes | | |
+| Cost roll-up | Yes | Their department | |
+| Approve a milestone | Any | If all its tasks are in their department and none are their own | |
+| Work tasks through their agent | Yes | Yes | Yes |
 
 Rules the server enforces for every caller, human or agent:
 - Only a task's workers can start, report on or submit it.
