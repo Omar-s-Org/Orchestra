@@ -25,6 +25,8 @@ export type SimOptions = {
   baseUrl: string;             // e.g. http://localhost:8787 or the Railway URL
   projectFile?: string;        // defaults to the Northwind demo
   people?: string[];           // person ids to simulate; default: everyone who has a story
+  handsOff?: string[];         // task ids the simulator must never touch (a real agent does them)
+  standIn?: boolean;           // standing in for a real person: never take over a task someone else already started
   speed?: number;              // delay multiplier: 1 = 3–6 s between steps, 0 = no delays (tests)
   reset?: boolean;             // reset the demo data first (logs in as the PM)
   loop?: boolean;              // stay online after the work is done: heartbeat, and pick up tasks again after a reset
@@ -60,7 +62,7 @@ export function genericStory(t: { id: string; title: string }): Story {
     ],
     artifact: { name: `${t.id.toLowerCase()}-progress.svg`, chart: { title: `${t.id}: work completed per step`, unit: "%", bars: [{ label: "Research", value: 30 }, { label: "Build", value: 55 }, { label: "Review", value: 15 }] } },
     completion: {
-      explanation: `"${t.title}" is ready for review.\n\n{{artifact}}\n\nResearch, planning, coding and review agents each handled one step; the result was checked against the task scope.`,
+      explanation: `"${t.title}" is done.\n\n{{artifact}}\n\nResearch, planning, coding and review agents each handled one step; the result was checked against the task scope.`,
       agents_used: ["research agent", "planning agent", "coding agent", "review agent"], cost_usd: 0.31,
     },
   };
@@ -93,7 +95,7 @@ async function agentKey(baseUrl: string, p: Person) {
 const workOrder = (a: TaskInfo, b: TaskInfo) =>
   Number(!a.parent) - Number(!b.parent) || Number(a.status !== "in_progress") - Number(b.status !== "in_progress");
 
-type AgentOptions = { baseUrl: string; speed: number; log: (line: string) => void; loop: boolean; heartbeatMs: number; signal?: AbortSignal };
+type AgentOptions = { baseUrl: string; speed: number; log: (line: string) => void; loop: boolean; heartbeatMs: number; signal?: AbortSignal; standIn?: boolean };
 
 async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories: Record<string, Story>, startDelay: number) {
   const name = `${firstName(p)}'s Claude`;
@@ -114,9 +116,12 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
   // Locked tasks wait until their prerequisites are approved (the server would refuse them anyway).
   // Each wait is logged once; in --loop mode the agent picks the task up as soon as it unlocks.
   const announced = new Set<string>();
+  const startedHere = new Set<string>();
   const openTasks = async () => {
     const open = (await call<TaskInfo[]>("team_board", { mine: true }))
-      .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"));
+      .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"))
+      // A stand-in leaves alone anything the real person's own agent has already started.
+      .filter(t => !o.standIn || t.status === "todo" || startedHere.has(t.id));
     for (const t of open.filter(t => t.locked && !announced.has(t.id))) {
       announced.add(t.id);
       log(`${t.id} waiting: locked until ${(t.blocked_by ?? []).join(", ")} is done`);
@@ -137,6 +142,7 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
         if (long) await call("read_kb", { doc_id: long.id });
 
         await call("start_task", { task_id: id, plan: story.plan });
+        startedHere.add(id);
         log(`${id} started: ${task.title}`);
         await pause();
         for (const step of story.progress) {
@@ -153,7 +159,7 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
         }
         const { explanation, ...rest } = story.completion;
         await call("submit_task", { task_id: id, explanation: explanation.replace("{{artifact}}", embed).replace(/\n{3,}/g, "\n\n").trim(), ...rest });
-        log(`${id} submitted for review`);
+        log(`${id} completed`);
         done++;
         await pause();
       } catch (e) {
@@ -164,7 +170,7 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
   }
 
   const first = await openTasks();
-  if (!first.length) log(o.loop ? "nothing to do yet; staying online" : "nothing to do right now (tasks are locked, in review or done; approve prerequisites or reset the demo)");
+  if (!first.length) log(o.loop ? "nothing to do yet; staying online" : "nothing to do right now (tasks are locked or done; reset the demo to start over)");
   let done = await workOpenTasks(first);
 
   // --loop: every call is a heartbeat, so checking for work every ~30 s keeps the agent green in the live rail.
@@ -189,7 +195,7 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
 export async function runSim(opts: SimOptions) {
   const o: AgentOptions = {
     baseUrl: opts.baseUrl.replace(/\/+$/, ""), speed: opts.speed ?? 1, log: opts.log ?? console.log,
-    loop: opts.loop ?? false, heartbeatMs: opts.heartbeatMs ?? 30_000, signal: opts.signal,
+    loop: opts.loop ?? false, heartbeatMs: opts.heartbeatMs ?? 30_000, signal: opts.signal, standIn: opts.standIn,
   };
   const projectFile = opts.projectFile ?? DEFAULT_PROJECT;
   const project = validateProject(JSON.parse(fs.readFileSync(projectFile, "utf8")));
@@ -206,7 +212,9 @@ export async function runSim(opts: SimOptions) {
 
   // A task with several workers is driven by the first simulated worker, so two agents never race on it.
   const owned = new Map(cast.map(id => [id, new Set<string>()]));
+  const handsOff = new Set(opts.handsOff ?? []);
   for (const t of project.tasks) {
+    if (handsOff.has(t.id)) continue;
     const driver = t.workers.find(w => owned.has(w));
     if (driver) owned.get(driver)!.add(t.id);
   }
@@ -221,6 +229,6 @@ export async function runSim(opts: SimOptions) {
   o.log(`Simulating ${cast.map(id => person.get(id)!.name).join(", ")} against ${o.baseUrl}/mcp${o.loop ? " (--loop: agents stay online; Ctrl+C to stop)" : ""}`);
   const results = await Promise.all(cast.map((id, i) => runAgent(o, person.get(id)!, owned.get(id)!, stories, i * 1500)));
   const submitted = results.reduce((a, b) => a + b, 0);
-  o.log(`Done: ${submitted} task(s) submitted for review. Approve them in the UI as a senior or the PM.`);
+  o.log(`Done: ${submitted} task(s) completed. When a milestone is finished, a senior or the PM approves it in the UI.`);
   return { submitted };
 }

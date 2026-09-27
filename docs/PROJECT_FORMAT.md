@@ -22,7 +22,8 @@ The loader checks every reference and prints **all** problems at once (unknown p
       "agent_key": "ak_john" }          // optional, default ak_<id>  (MCP: Authorization: Bearer ak_john)
   ],
 
-  "milestones": [ { "id": "M-1", "name": "MVP ready", "due": "2026-10-03" } ],
+  "milestones": [ { "id": "M-1", "name": "MVP ready", "due": "2026-10-03",
+                    "signed_off": false } ],   // optional: true = already signed off by the PM (every task in it must be done)
 
   "docs": [     // knowledge base; min_role = who may read it (junior = everyone)
     { "id": "K-1", "title": "Launch brief", "body": "# markdown…", "min_role": "junior", "author": "layla" }

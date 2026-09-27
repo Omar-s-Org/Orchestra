@@ -100,6 +100,14 @@ describe("project files", () => {
     expect(S.userBySession(db, jr)).toBeUndefined();          // role changed → must log in again
   });
 
+  it("signed_off milestones must have every task done", () => {
+    const p = mini();
+    (p.milestones[0] as any).signed_off = true;
+    expect(() => validateProject(p)).toThrow(/signed_off: tasks not done yet/);
+    p.tasks.forEach((t: any) => (t.status = "done"));
+    expect(() => validateProject(p)).not.toThrow();
+  });
+
   it("reset reloads the last loaded project file", () => {
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "orch-")), "tiny.json");
     fs.writeFileSync(file, JSON.stringify(mini()));

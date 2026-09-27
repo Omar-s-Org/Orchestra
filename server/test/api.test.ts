@@ -45,20 +45,18 @@ describe("REST + MCP end to end", () => {
     expect(pm.project.name).toBe("Northwind Launch");
   });
 
-  it("agent works a task over MCP, webhook fires, senior approves over REST", async () => {
+  it("agent works a task over MCP, submitting completes it and unlocks the next, webhooks fire", async () => {
     const pm = await login("layla@northwind.test");
     const port = (hookServer.address() as { port: number }).port;
     await fetch(`${base}/api/webhooks`, { method: "POST", headers: { Authorization: `Bearer ${pm}`, "Content-Type": "application/json" }, body: JSON.stringify({ url: `http://127.0.0.1:${port}/hook` }) });
 
-    // T-6 is locked behind T-4: Priya's agent submits T-4, Sara approves, then Omar's agent can start.
+    // T-6 is locked behind T-4: Priya's agent submits T-4 (which completes it), then Omar's agent can start.
     const priya = await agent("ak_priya", "Priya's Claude");
     const locked = await (await agent("ak_omar", "probe")).callTool({ name: "start_task", arguments: { task_id: "T-6", plan: "x" } });
     expect(locked.isError).toBe(true);
     expect(text(locked)).toMatch(/^Locked \(409\): T-6 is locked until its prerequisites are done: T-4/);
     await priya.callTool({ name: "submit_task", arguments: { task_id: "T-4", explanation: "Product API complete with search and recommendations." } });
     await priya.close();
-    const saraTok = await login("sara@northwind.test");
-    await fetch(`${base}/api/tasks/T-4/approve`, { method: "POST", headers: { Authorization: `Bearer ${saraTok}` } });
 
     const a = await agent("ak_omar", "Omar's Claude Code");
     // Every agent is told the workflow once, on connect.
@@ -72,7 +70,7 @@ describe("REST + MCP end to end", () => {
     const png = Buffer.from("89504e470d0a1a0a", "hex").toString("base64");
     const art = JSON.parse(text(await a.callTool({ name: "attach_artifact", arguments: { task_id: "T-6", name: "mock.png", mime: "image/png", base64: png } })));
     const sub = await a.callTool({ name: "submit_task", arguments: { task_id: "T-6", explanation: `Built the screens with a UI agent. ${art.markdown}`, agents_used: ["ui agent"], cost_usd: 0.3 } });
-    expect(JSON.parse(text(sub))).toMatchObject({ ok: true, id: "T-6", status: "review" });
+    expect(JSON.parse(text(sub))).toMatchObject({ ok: true, id: "T-6", status: "done" });
     const refused = await a.callTool({ name: "read_kb", arguments: { doc_id: "K-5" } });
     expect(refused.isError).toBe(true);
     expect(text(refused)).toMatch(/^Forbidden \(403\): /);
@@ -85,19 +83,19 @@ describe("REST + MCP end to end", () => {
     expect(img.headers.get("content-type")).toBe("image/png");
     expect((await fetch(`${base}${art.url}?token=${sara}`)).status).toBe(200);
 
-    const approved = await (await fetch(`${base}/api/tasks/T-6/approve`, { method: "POST", headers: { Authorization: `Bearer ${sara}`, "Content-Type": "application/json" }, body: "{}" })).json();
-    expect(approved.status).toBe("done");
+    // Task-level approval no longer exists.
+    expect((await fetch(`${base}/api/tasks/T-6/approve`, { method: "POST", headers: { Authorization: `Bearer ${sara}` } })).status).toBe(404);
 
     const feed = await (await get(sara, "/api/activity?via=agent&kind=completion")).json();
     expect(feed[0].task.id).toBe("T-6");
     await new Promise(r => setTimeout(r, 200));
-    expect(hooks.map(h => h.event)).toEqual(expect.arrayContaining(["task.status_changed", "task.submitted", "task.approved"]));
+    expect(hooks.map(h => h.event)).toEqual(expect.arrayContaining(["task.status_changed", "task.submitted"]));
   });
 
-  it("junior gets 403 on graph and approve", async () => {
+  it("junior gets 403 on graph and on milestone approval", async () => {
     const john = await login("john@northwind.test");
     expect((await get(john, "/api/graph")).status).toBe(403);
-    const r = await fetch(`${base}/api/tasks/T-4/approve`, { method: "POST", headers: { Authorization: `Bearer ${john}` } });
+    const r = await fetch(`${base}/api/milestones/M-1/approve`, { method: "POST", headers: { Authorization: `Bearer ${john}` } });
     expect(r.status).toBe(403);
   });
 

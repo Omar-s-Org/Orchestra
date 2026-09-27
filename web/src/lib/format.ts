@@ -15,7 +15,8 @@ export const STATUS_LABEL: Record<Status, string> = {
   done: "Done",
 };
 
-export const STATUS_ORDER: Status[] = ["todo", "in_progress", "review", "done"];
+// "review" is no longer used: submitting completes a task and approval happens per milestone.
+export const STATUS_ORDER: Status[] = ["todo", "in_progress", "done"];
 
 /** "$0.42", "$12.30" once the amount reaches $10. */
 export function money(amount: number): string {

@@ -89,7 +89,20 @@ export type LiveAgent = {
 };
 
 export type Overview = {
-  milestones: { id: string; name: string; due: string; total: number; done: number; pct: number }[];
+  milestones: {
+    id: string;
+    name: string;
+    due: string;
+    total: number;
+    done: number;
+    pct: number;
+    /** Milestone sign-off (optional so older servers and mock data still type-check). */
+    approved_at?: string | null;
+    approved_by?: UserRef | null;
+    ready_for_signoff?: boolean;
+    /** Whether this viewer may approve it (PM: any; senior: fully in their department). */
+    can_approve?: boolean;
+  }[];
   by_status: { todo: number; in_progress: number; review: number; done: number };
   overdue: number;
   review_queue: ReviewItem[];
@@ -149,4 +162,22 @@ export type DemoAccount = {
   role: Role;
   department: string;
   title: string | null;
+};
+
+/** GET /api/demo/status (LOVABLE_PLAN §12). */
+export type DemoStatus = {
+  projects: string[];
+  running: boolean;
+  project: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  end_reason: string | null;
+  cast: UserRef[];
+  /** People whose own agents work their tasks live (the simulator leaves them alone). */
+  real: UserRef[];
+  /** Who can be picked as a real agent for the Lumen demo. */
+  available_cast: UserRef[];
+  progress: { done: number; total: number } | null;
+  waiting_for_approval: { id: string; title: string }[];
+  log: string[];
 };

@@ -55,19 +55,19 @@ describe("unified visibility rule", () => {
   it("filters: person, department, status, mine", () => {
     expect(ids(S.listTasks(ui("layla"), { person: "priya" }))).toEqual(["T-10", "T-11", "T-4"]);
     expect(ids(S.listTasks(ui("layla"), { department: "Marketing" }))).toEqual(["T-12", "T-13", "T-8", "T-9"]);
-    expect(S.listTasks(ui("layla"), { status: "review" }).map(t => t.id)).toEqual(["T-8"]);
+    expect(S.listTasks(ui("layla"), { status: "review" })).toEqual([]);   // tasks no longer wait in review
+    expect(S.listTasks(ui("layla"), { status: "done" }).map(t => t.id)).toContain("T-8");
     expect(ids(S.listTasks(ui("hassan"), { mine: true }))).toEqual(["T-14", "T-7"]);
   });
 });
 
-/** Priya submits T-4 and Sara approves it, which unlocks T-6 (Omar) and T-7 (Hassan). */
+/** Priya submits T-4, which completes it and unlocks T-6 (Omar) and T-7 (Hassan). */
 function finishT4() {
   S.submitTask(agent("priya"), "T-4", { summary: "Product API complete with search and recommendations." });
-  S.approveTask(ui("sara"), "T-4");
 }
 
 describe("agent workflow", () => {
-  it("start → report → attach → submit → senior approves", () => {
+  it("start → report → attach → submit completes the task", () => {
     finishT4();
     const a = agent("hassan");
     expect(S.startTask(a, "T-7", "Write e2e tests").status).toBe("in_progress");
@@ -75,17 +75,13 @@ describe("agent workflow", () => {
     const art = S.attachArtifact(a, "T-7", { name: "report.md", mime: "text/markdown", text: "# ok" });
     expect(art.url).toBe(`/api/artifacts/${art.id}`);
     const sub = S.submitTask(a, "T-7", { summary: `All green. Details: [report](${art.url})`, agentsUsed: ["test agent"], costUsd: 0.2 });
-    expect(sub.status).toBe("review");
+    expect(sub.status).toBe("done");
     expect(sub.cost_usd).toBe(0.6);
-    expect(sub.updates[0]).toMatchObject({ kind: "completion", via: "agent", agent_name: "hassan-bot" });
-    expect(S.getTask(ui("sara"), "T-7").allowed_actions).toEqual(["approve", "reopen"]);
-    expect(S.approveTask(ui("sara"), "T-7").status).toBe("done");
+    expect(sub.updates[0]).toMatchObject({ kind: "completion", via: "agent", agent_name: "hassan-bot", status_to: "done" });
+    expect(S.getTask(ui("sara"), "T-7").allowed_actions).toEqual([]);   // no task-level approval any more
   });
-  it("juniors and their agents can never approve", () => {
-    expect(S.getTask(ui("john"), "T-4").allowed_actions).toEqual([]);
-    finishT4();
-    S.submitTask(agent("hassan"), "T-7", { summary: "Finished all the integration tests." });
-    expect(() => S.approveTask(ui("john"), "T-7")).toThrow(/can't approve/);
+  it("juniors and their agents can never approve a milestone", () => {
+    expect(() => S.approveMilestone(ui("john"), "M-1")).toThrow(/Juniors .* can't approve milestones/);
     const denied = db.prepare("SELECT * FROM audit WHERE allowed=0").get() as { actor_id: string };
     expect(denied.actor_id).toBe("john");
   });
@@ -94,10 +90,6 @@ describe("agent workflow", () => {
   });
   it("submit requires a real explanation", () => {
     expect(() => S.submitTask(agent("hassan"), "T-7", { summary: "done" })).toThrow(/explanation/);
-  });
-  it("reopen needs a note and returns to in_progress", () => {
-    expect(() => S.reopenTask(ui("tom"), "T-8", "")).toThrow(/note/);
-    expect(S.reopenTask(ui("tom"), "T-8", "Shorter headline please").status).toBe("in_progress");
   });
   it("mentioning a task id in a report creates a graph edge", () => {
     S.reportProgress(agent("priya"), "T-11", { summary: "Search ranking reuses the T-5 feature store" });
@@ -112,7 +104,7 @@ describe("agent workflow", () => {
 });
 
 describe("prerequisites and suggested order", () => {
-  it("a task is locked until every prerequisite is done (approved), then unlocks", () => {
+  it("a task is locked until every prerequisite is done, and submitting a prerequisite unlocks it", () => {
     const t6 = S.getTask(ui("omar"), "T-6");
     expect(t6).toMatchObject({ locked: true, blocked_by: [{ id: "T-4", status: "in_progress" }] });
     expect(() => S.startTask(agent("omar"), "T-6", "go")).toThrow(/locked until its prerequisites are done: T-4 \(in_progress\)/);
@@ -120,8 +112,6 @@ describe("prerequisites and suggested order", () => {
     const refused = db.prepare("SELECT * FROM audit WHERE action='start_task' AND allowed=0").get();
     expect(refused).toBeTruthy();
     S.submitTask(agent("priya"), "T-4", { summary: "Product API complete with search and recommendations." });
-    expect(S.getTask(ui("omar"), "T-6").locked).toBe(true);   // review isn't enough
-    S.approveTask(ui("sara"), "T-4");
     expect(S.getTask(ui("omar"), "T-6")).toMatchObject({ locked: false, blocked_by: [] });
     expect(S.startTask(agent("omar"), "T-6", "Build sign-up").status).toBe("in_progress");
   });
@@ -141,12 +131,10 @@ describe("prerequisites and suggested order", () => {
   });
 });
 
-describe("overview, review queue, cost", () => {
-  it("review queue items carry the latest completion and artifacts", () => {
-    const o = S.overview(ui("tom"));
-    expect(o.review_queue.map(t => t.id)).toEqual(["T-8"]);
-    expect(o.review_queue[0].latest_completion?.summary).toMatch(/Variant \*\*B\*\*/);
-    expect(o.review_queue[0].artifacts[0].mime).toBe("image/svg+xml");
+describe("overview, milestones, cost", () => {
+  it("the task review queue is always empty (approval is per milestone)", () => {
+    expect(S.overview(ui("tom")).review_queue).toEqual([]);
+    expect(S.getTask(ui("tom"), "T-8").updates[0].summary).toMatch(/Variant \*\*B\*\*/);   // the completion report is on the task
   });
   it("juniors get no cost and no review queue", () => {
     const o = S.overview(ui("john"));
@@ -179,6 +167,57 @@ describe("graph", () => {
     expect(has("depends_on", "task:T-5", "task:T-3")).toBe(true);
     expect(has("works_on", "person:john", "task:T-5")).toBe(true);
     expect(g.edges.some(e => e.type === "mentions")).toBe(true);
+  });
+});
+
+describe("milestone approval", () => {
+  const finish = (m: string) => db.prepare("UPDATE tasks SET status='done' WHERE milestone_id=?").run(m);
+  const onlyDept = (m: string, d: string) => {
+    db.prepare("DELETE FROM task_departments WHERE task_id IN (SELECT id FROM tasks WHERE milestone_id=?)").run(m);
+    db.prepare("INSERT INTO task_departments SELECT id, ? FROM tasks WHERE milestone_id=?").run(d, m);
+  };
+  const ms = (who: string, id: string) => S.overview(ui(who)).milestones.find(m => m.id === id)!;
+
+  it("needs every task done; the PM approves any milestone", () => {
+    expect(ms("layla", "M-1")).toMatchObject({ ready_for_signoff: false, approved_at: null, can_approve: true });
+    expect(() => S.approveMilestone(ui("layla"), "M-1")).toThrow(/still has open tasks: T-/);
+    finish("M-1");
+    expect(ms("layla", "M-1").ready_for_signoff).toBe(true);
+    const r = S.approveMilestone(ui("layla"), "M-1", "Great work");
+    expect(r).toMatchObject({ id: "M-1", approved_by: { id: "layla" } });
+    expect(ms("john", "M-1")).toMatchObject({ ready_for_signoff: false, approved_by: { id: "layla" }, can_approve: false });
+    expect(() => S.approveMilestone(ui("layla"), "M-1")).toThrow(/already signed off/);
+    expect(() => S.approveMilestone(ui("layla"), "M-9")).toThrow(/not found/);
+    expect(() => S.createTask(ui("layla"), { milestoneId: "M-1", title: "Late addition" })).toThrow(/is signed off/);
+  });
+
+  it("a senior approves a milestone fully in their department, not a mixed one", () => {
+    finish("M-2"); finish("M-3");
+    onlyDept("M-2", "Engineering");
+    expect(ms("sara", "M-2")).toMatchObject({ ready_for_signoff: true, can_approve: true });
+    expect(S.approveMilestone(ui("sara"), "M-2")).toMatchObject({ approved_by: { id: "sara" } });
+    onlyDept("M-3", "Marketing");   // then make one task Engineering: a mixed milestone
+    db.prepare("UPDATE task_departments SET department='Engineering' WHERE task_id=(SELECT MIN(id) FROM tasks WHERE milestone_id='M-3')").run();
+    expect(ms("sara", "M-3").can_approve).toBe(false);
+    expect(() => S.approveMilestone(ui("sara"), "M-3")).toThrow(/only approve milestones whose tasks are all in Engineering/);
+  });
+
+  it("submitting the last open task fires milestone.ready", () => {
+    const events: string[] = [];
+    const orig = globalThis.fetch;
+    db.prepare("INSERT INTO webhooks (url, events) VALUES ('http://hook.test', '[\"*\"]')").run();
+    globalThis.fetch = (async (_u: unknown, init: { body: string }) => { events.push(JSON.parse(init.body).event); return new Response("ok"); }) as unknown as typeof fetch;
+    try {
+      db.prepare("UPDATE tasks SET status='done' WHERE milestone_id=(SELECT milestone_id FROM tasks WHERE id='T-7') AND id != 'T-7'").run();
+      db.prepare("UPDATE tasks SET status='in_progress' WHERE id='T-7'").run();
+      S.submitTask(agent("hassan"), "T-7", { summary: "Integration tests are complete and green." });
+    } finally { globalThis.fetch = orig; }
+    expect(events).toEqual(expect.arrayContaining(["task.submitted", "milestone.ready"]));
+  });
+
+  it("refusals are audited", () => {
+    try { S.approveMilestone(ui("sara"), "M-1"); } catch { /* expected */ }
+    expect(S.auditLog(ui("layla")).some((a: any) => a.action === "approve_milestone" && a.allowed === 0)).toBe(true);
   });
 });
 

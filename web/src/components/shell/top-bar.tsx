@@ -13,6 +13,8 @@ import { useTheme } from "@/hooks/use-theme";
 import { overviewQuery } from "@/lib/queries";
 import type { Me } from "@/lib/types";
 
+import { DemoControl } from "./demo-control";
+import { MilestoneNotifier } from "./milestone-notifier";
 import { LiveAgentsList, useActiveAgentCount } from "./live-agents";
 import { UserMenu } from "./user-menu";
 
@@ -22,9 +24,16 @@ function MilestoneStrip() {
   return (
     <div className="hidden items-center gap-4 lg:flex">
       {data.milestones.map((m) => (
-        <div key={m.id} className="w-32" title={`${m.name} · due ${m.due} · ${m.done}/${m.total} done`}>
+        <div
+          key={m.id}
+          className="w-32"
+          title={`${m.name} · due ${m.due} · ${m.done}/${m.total} done${m.approved_at ? " · approved" : m.ready_for_signoff ? " · ready for approval" : ""}`}
+        >
           <div className="flex justify-between text-[11px]">
-            <span className="truncate text-muted-foreground">{m.name}</span>
+            <span className="truncate text-muted-foreground">
+              {m.approved_at ? <span className="text-success">✓ </span> : null}
+              {m.name}
+            </span>
             <span className="font-medium tabular-nums">{m.pct}%</span>
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -81,6 +90,8 @@ export function TopBar({ me }: { me: Me }) {
             </TooltipProvider>
           </div>
         ) : null}
+        <MilestoneNotifier />
+        <DemoControl me={me} />
         <SourcePill />
         <Sheet>
           <SheetTrigger asChild>

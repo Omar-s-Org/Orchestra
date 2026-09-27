@@ -56,16 +56,17 @@ export function canSeeTask(ix: Index, u: User, taskId: string): boolean {
 
 export const isWorker = (ix: Index, u: User, taskId: string) => !!ix.workers.get(taskId)?.includes(u.id);
 
-/** Seniors approve within their department; the PM approves anything. Workers never approve their own task. */
-export function canApprove(ix: Index, u: User, taskId: string) {
-  if (isWorker(ix, u, taskId) && u.role !== "pm") return false;
+/**
+ * Approval happens per milestone, not per task. The PM approves any milestone; a senior approves one
+ * where every task belongs to their department; juniors never approve.
+ */
+export function canApproveMilestone(ix: Index, u: User, taskIds: string[]) {
   if (u.role === "pm") return true;
-  return u.role === "senior" && (ix.departments.get(taskId) ?? []).includes(u.department) && canSeeTask(ix, u, taskId);
+  return u.role === "senior" && taskIds.length > 0 && taskIds.every(id => (ix.departments.get(id) ?? []).includes(u.department));
 }
 
-export function allowedActions(ix: Index, u: User, taskId: string, status: Status): ("approve" | "reopen")[] {
-  return status === "review" && canApprove(ix, u, taskId) ? ["approve", "reopen"] : [];
-}
+/** Tasks carry no approve/reopen actions any more (kept so the API shape is unchanged). */
+export const allowedActions = (): ("approve" | "reopen")[] => [];
 
 export const canReadDoc = (u: User, minRole: Role) => LEVEL[u.role] >= LEVEL[minRole];
 

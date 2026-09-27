@@ -35,7 +35,7 @@ export function createApp(db: DB) {
   };
 
   app.get("/api/health", (_req, res) => { res.json({ ok: true }); });
-  app.get("/", (req, res) => { res.type("html").send(statusPage(db, `${req.protocol}://${req.get("host")}`)); });
+  app.get("/", (req, res) => { res.type("html").send(statusPage(db, `${req.protocol}://${req.get("host")}`, demoStatus(db).available_cast)); });
   app.post("/api/auth/login", (req, res) => send(res, () => S.login(db, req.body?.email, req.body?.password)));
 
   // DEMO ONLY: who can log in (no passwords); lets the login screen list the current project's people.
@@ -63,8 +63,6 @@ export function createApp(db: DB) {
   r.get("/me/agent-key", h((c, req) => S.agentKey(c, `${req.protocol}://${req.get("host")}`)));
   r.get("/tasks", h((c, req) => S.listTasks(c, { status: q(req, "status"), department: q(req, "department"), person: q(req, "person"), mine: q(req, "mine") === "true" })));
   r.get("/tasks/:id", h((c, req) => S.getTask(c, p(req, "id"))));
-  r.post("/tasks/:id/approve", h((c, req) => S.approveTask(c, p(req, "id"), req.body?.note)));
-  r.post("/tasks/:id/reopen", h((c, req) => S.reopenTask(c, p(req, "id"), req.body?.note)));
   r.get("/activity", h((c, req) => S.activity(c, { limit: Number(q(req, "limit")), task: q(req, "task"), via: q(req, "via"), kind: q(req, "kind") })));
   r.get("/agents/live", h(c => S.liveAgents(c)));
   r.get("/overview", h(c => S.overview(c)));
@@ -84,6 +82,7 @@ export function createApp(db: DB) {
   });
   // PM setup
   r.post("/milestones", h((c, req) => S.createMilestone(c, req.body ?? {})));
+  r.post("/milestones/:id/approve", h((c, req) => S.approveMilestone(c, p(req, "id"), req.body?.note)));
   r.post("/tasks", h((c, req) => S.createTask(c, req.body ?? {})));
   r.post("/kb", h((c, req) => S.createDoc(c, req.body ?? {})));
   r.post("/webhooks", h((c, req) => S.addWebhook(c, req.body ?? {})));

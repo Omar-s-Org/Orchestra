@@ -1,7 +1,7 @@
 // Outbound webhooks: the open plug. Any external tool can subscribe to project events later.
 import type { DB } from "./db.js";
 
-export type Event = "task.status_changed" | "task.progress" | "task.submitted" | "task.approved";
+export type Event = "task.status_changed" | "task.progress" | "task.submitted" | "milestone.ready" | "milestone.approved";
 
 export function emit(db: DB, event: Event, data: Record<string, unknown>) {
   const hooks = db.prepare("SELECT url, events FROM webhooks").all() as { url: string; events: string }[];

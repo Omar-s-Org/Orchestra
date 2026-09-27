@@ -291,7 +291,7 @@
       "title": "Beta landing page copy",
       "milestone": "M-2",
       "due": "2026-10-05",
-      "status": "review",
+      "status": "done",
       "departments": [
         "Marketing"
       ],
@@ -396,18 +396,6 @@
       "cost_usd": 0.84,
       "minutes_ago": 2900,
       "status_from": "in_progress",
-      "status_to": "review"
-    },
-    {
-      "task": "T-1",
-      "user": "layla",
-      "kind": "approval",
-      "summary": "Approved.",
-      "agents_used": [],
-      "cost_usd": 0,
-      "minutes_ago": 2880,
-      "via": "ui",
-      "status_from": "review",
       "status_to": "done"
     },
     {
@@ -434,18 +422,6 @@
       "cost_usd": 0.63,
       "minutes_ago": 1300,
       "status_from": "in_progress",
-      "status_to": "review"
-    },
-    {
-      "task": "T-3",
-      "user": "sara",
-      "kind": "approval",
-      "summary": "Looks good. Approved.",
-      "agents_used": [],
-      "cost_usd": 0,
-      "minutes_ago": 1250,
-      "via": "ui",
-      "status_from": "review",
       "status_to": "done"
     },
     {
@@ -459,18 +435,6 @@
       "cost_usd": 0.41,
       "minutes_ago": 900,
       "status_from": "in_progress",
-      "status_to": "review"
-    },
-    {
-      "task": "T-10",
-      "user": "sara",
-      "kind": "approval",
-      "summary": "Approved.",
-      "agents_used": [],
-      "cost_usd": 0,
-      "minutes_ago": 880,
-      "via": "ui",
-      "status_from": "review",
       "status_to": "done"
     },
     {
@@ -542,7 +506,7 @@
       "cost_usd": 0.56,
       "minutes_ago": 55,
       "status_from": "in_progress",
-      "status_to": "review",
+      "status_to": "done",
       "links": [
         {
           "label": "Landing page draft",

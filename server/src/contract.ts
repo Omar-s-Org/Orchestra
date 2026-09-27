@@ -54,7 +54,10 @@ export const LiveAgent = z.object({
   task: z.object({ id: z.string(), title: z.string() }).nullable(), activity: z.string(), last_seen: iso,
 });
 export const Overview = z.object({
-  milestones: z.array(z.object({ id: z.string(), name: z.string(), due: z.string().nullable(), total: z.number(), done: z.number(), pct: z.number().min(0).max(100) })),
+  milestones: z.array(z.object({
+    id: z.string(), name: z.string(), due: z.string().nullable(), total: z.number(), done: z.number(), pct: z.number().min(0).max(100),
+    approved_at: iso.nullable(), approved_by: UserRef.nullable(), ready_for_signoff: z.boolean(), can_approve: z.boolean(),
+  })),
   by_status: z.object({ todo: z.number(), in_progress: z.number(), review: z.number(), done: z.number() }),
   overdue: z.number(),
   review_queue: z.array(ReviewItem),
@@ -83,6 +86,8 @@ export const DemoStatus = z.object({
   projects: z.array(z.string()),
   running: z.boolean(), project: z.string().nullable(), started_at: iso.nullable(), finished_at: iso.nullable(), end_reason: z.string().nullable(),
   cast: z.array(UserRef),
+  real: z.array(UserRef),
+  available_cast: z.array(UserRef),
   progress: z.object({ done: z.number(), total: z.number() }).nullable(),
   waiting_for_approval: z.array(z.object({ id: z.string(), title: z.string() })),
   log: z.array(z.string()),

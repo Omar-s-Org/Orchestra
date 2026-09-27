@@ -71,6 +71,8 @@ export function openDb(file = process.env.DATABASE_PATH ?? "./data/orchestra.sql
   // Additive migrations for databases created by an earlier v1 build.
   const cols = (db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]).map(c => c.name);
   if (!cols.includes("due")) db.exec("ALTER TABLE tasks ADD COLUMN due TEXT");
+  const mcols = (db.prepare("PRAGMA table_info(milestones)").all() as { name: string }[]).map(c => c.name);
+  if (!mcols.includes("approved_at")) db.exec("ALTER TABLE milestones ADD COLUMN approved_at TEXT; ALTER TABLE milestones ADD COLUMN approved_by TEXT;");
   return db;
 }
 
