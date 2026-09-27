@@ -57,12 +57,14 @@ export function canSeeTask(ix: Index, u: User, taskId: string): boolean {
 export const isWorker = (ix: Index, u: User, taskId: string) => !!ix.workers.get(taskId)?.includes(u.id);
 
 /**
- * Approval happens per milestone, not per task. The PM approves any milestone; a senior approves one
- * where every task belongs to their department; juniors never approve.
+ * Approval happens per milestone, not per task. The PM approves any milestone. A senior approves one
+ * where every task belongs to their department and is visible to them, and none is their own work
+ * (nobody approves their own work). Juniors never approve.
  */
 export function canApproveMilestone(ix: Index, u: User, taskIds: string[]) {
   if (u.role === "pm") return true;
-  return u.role === "senior" && taskIds.length > 0 && taskIds.every(id => (ix.departments.get(id) ?? []).includes(u.department));
+  return u.role === "senior" && taskIds.length > 0 && taskIds.every(id =>
+    (ix.departments.get(id) ?? []).includes(u.department) && canSeeTask(ix, u, id) && !isWorker(ix, u, id));
 }
 
 /** Tasks carry no approve/reopen actions any more (kept so the API shape is unchanged). */

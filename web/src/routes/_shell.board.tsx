@@ -149,7 +149,7 @@ function Kanban({ tasks, me, loading }: { tasks: TaskSummary[]; me: Me; loading:
   )?.id;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-4">
+    <div className="grid gap-4 lg:grid-cols-3">
       {STATUS_ORDER.map((status) => {
         const col = ordered(tasks.filter((t) => t.status === status));
         return (

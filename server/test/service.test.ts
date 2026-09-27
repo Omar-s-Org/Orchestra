@@ -202,6 +202,14 @@ describe("milestone approval", () => {
     expect(() => S.approveMilestone(ui("sara"), "M-3")).toThrow(/only approve milestones whose tasks are all in Engineering/);
   });
 
+  it("a senior can't approve a milestone that holds their own work", () => {
+    finish("M-2"); onlyDept("M-2", "Engineering");
+    db.prepare("INSERT OR IGNORE INTO task_people (task_id, user_id, relation) SELECT MIN(id), 'sara', 'worker' FROM tasks WHERE milestone_id='M-2'").run();
+    expect(ms("sara", "M-2").can_approve).toBe(false);
+    expect(() => S.approveMilestone(ui("sara"), "M-2")).toThrow(/none of them their own/);
+    expect(S.approveMilestone(ui("layla"), "M-2")).toMatchObject({ approved_by: { id: "layla" } });
+  });
+
   it("submitting the last open task fires milestone.ready", () => {
     const events: string[] = [];
     const orig = globalThis.fetch;

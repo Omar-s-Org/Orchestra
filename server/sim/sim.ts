@@ -26,7 +26,10 @@ export type SimOptions = {
   projectFile?: string;        // defaults to the Northwind demo
   people?: string[];           // person ids to simulate; default: everyone who has a story
   handsOff?: string[];         // task ids the simulator must never touch (a real agent does them)
-  standIn?: boolean;           // standing in for a real person: never take over a task someone else already started
+  // Live demo with real agents: tasks the simulator itself started (shared by every run). A started task
+  // outside this set belongs to a real agent, so the simulator leaves it alone.
+  claimed?: Set<string>;
+  drivers?: string[];          // everyone who may drive a task (real people included); defaults to this run's cast
   speed?: number;              // delay multiplier: 1 = 3–6 s between steps, 0 = no delays (tests)
   reset?: boolean;             // reset the demo data first (logs in as the PM)
   loop?: boolean;              // stay online after the work is done: heartbeat, and pick up tasks again after a reset
@@ -95,7 +98,7 @@ async function agentKey(baseUrl: string, p: Person) {
 const workOrder = (a: TaskInfo, b: TaskInfo) =>
   Number(!a.parent) - Number(!b.parent) || Number(a.status !== "in_progress") - Number(b.status !== "in_progress");
 
-type AgentOptions = { baseUrl: string; speed: number; log: (line: string) => void; loop: boolean; heartbeatMs: number; signal?: AbortSignal; standIn?: boolean };
+type AgentOptions = { baseUrl: string; speed: number; log: (line: string) => void; loop: boolean; heartbeatMs: number; signal?: AbortSignal; claimed?: Set<string> };
 
 async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories: Record<string, Story>, startDelay: number) {
   const name = `${firstName(p)}'s Claude`;
@@ -113,15 +116,15 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
     if (r.isError) throw new Error(text.replace(/^Error:\s*/, ""));
     return JSON.parse(text) as T;
   };
-  // Locked tasks wait until their prerequisites are approved (the server would refuse them anyway).
+  // Locked tasks wait until their prerequisites are done (the server would refuse them anyway).
   // Each wait is logged once; in --loop mode the agent picks the task up as soon as it unlocks.
   const announced = new Set<string>();
-  const startedHere = new Set<string>();
+  // Never take over a task a real agent already started (see SimOptions.claimed).
+  const mayWork = (id: string, status: string) => !o.claimed || status === "todo" || o.claimed.has(id);
   const openTasks = async () => {
     const open = (await call<TaskInfo[]>("team_board", { mine: true }))
       .filter(t => owned.has(t.id) && (t.status === "todo" || t.status === "in_progress"))
-      // A stand-in leaves alone anything the real person's own agent has already started.
-      .filter(t => !o.standIn || t.status === "todo" || startedHere.has(t.id));
+      .filter(t => mayWork(t.id, t.status));
     for (const t of open.filter(t => t.locked && !announced.has(t.id))) {
       announced.add(t.id);
       log(`${t.id} waiting: locked until ${(t.blocked_by ?? []).join(", ")} is done`);
@@ -137,12 +140,13 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
         // One read gives the whole brief (docs inline); read_kb only for a doc too long to inline.
         const { task } = await call<{ task: Brief }>("next_task", { task_id: id });
         if (task.status !== "todo" && task.status !== "in_progress") continue;
+        if (!mayWork(id, task.status)) continue;
         const story = stories[id] ?? genericStory(task);
         const long = task.docs?.find(d => d.truncated);
         if (long) await call("read_kb", { doc_id: long.id });
 
+        o.claimed?.add(id);
         await call("start_task", { task_id: id, plan: story.plan });
-        startedHere.add(id);
         log(`${id} started: ${task.title}`);
         await pause();
         for (const step of story.progress) {
@@ -174,7 +178,7 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
   let done = await workOpenTasks(first);
 
   // --loop: every call is a heartbeat, so checking for work every ~30 s keeps the agent green in the live rail.
-  // New work shows up when a prerequisite gets approved (task unlocks) or after a "Reset demo".
+  // New work shows up when a prerequisite is done (task unlocks) or after a "Reset demo".
   if (o.loop) {
     while (!o.signal?.aborted) {
       await sleep(o.heartbeatMs, o.signal);
@@ -195,7 +199,7 @@ async function runAgent(o: AgentOptions, p: Person, owned: Set<string>, stories:
 export async function runSim(opts: SimOptions) {
   const o: AgentOptions = {
     baseUrl: opts.baseUrl.replace(/\/+$/, ""), speed: opts.speed ?? 1, log: opts.log ?? console.log,
-    loop: opts.loop ?? false, heartbeatMs: opts.heartbeatMs ?? 30_000, signal: opts.signal, standIn: opts.standIn,
+    loop: opts.loop ?? false, heartbeatMs: opts.heartbeatMs ?? 30_000, signal: opts.signal, claimed: opts.claimed,
   };
   const projectFile = opts.projectFile ?? DEFAULT_PROJECT;
   const project = validateProject(JSON.parse(fs.readFileSync(projectFile, "utf8")));
@@ -210,13 +214,15 @@ export async function runSim(opts: SimOptions) {
   const unknown = cast.filter(id => !person.has(id));
   if (unknown.length) throw new Error(`unknown people: ${unknown.join(", ")}`);
 
-  // A task with several workers is driven by the first simulated worker, so two agents never race on it.
+  // A task with several workers is driven by its first worker among the drivers, so two agents (or two
+  // simulator runs of one demo) never race on it.
   const owned = new Map(cast.map(id => [id, new Set<string>()]));
   const handsOff = new Set(opts.handsOff ?? []);
+  const drivers = new Set([...(opts.drivers ?? []), ...cast]);
   for (const t of project.tasks) {
     if (handsOff.has(t.id)) continue;
-    const driver = t.workers.find(w => owned.has(w));
-    if (driver) owned.get(driver)!.add(t.id);
+    const driver = t.workers.find(w => drivers.has(w));
+    if (driver && owned.has(driver)) owned.get(driver)!.add(t.id);
   }
 
   if (opts.reset) {

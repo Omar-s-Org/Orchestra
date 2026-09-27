@@ -103,8 +103,14 @@ export async function runChecks(baseUrl: string, given?: Accounts): Promise<Chec
   await expect("agents/live", "/api/agents/live", C.LiveAgent.array(), pm);
   const ov = await expect("overview (pm)", "/api/overview", C.Overview, pm);
   const ovJr = await expect("overview (junior)", "/api/overview", C.Overview, junior);
-  if (ovJr) record("junior: no cost, no review queue", ovJr.cost === null && ovJr.review_queue.length === 0);
-  const art = ov?.review_queue.flatMap(r => r.artifacts)[0];
+  if (ovJr) record("junior: no cost, can approve nothing", ovJr.cost === null && ovJr.milestones.every(m => !m.can_approve));
+  // Find an artifact on any finished or started task (agents attach them while working).
+  let art: { url: string; mime: string } | undefined;
+  for (const t of (all ?? []).filter(t => t.status !== "todo")) {
+    const r = await call(`/api/tasks/${t.id}`, pm);
+    art = r.status === 200 ? (r.body as { artifacts: { url: string; mime: string }[] }).artifacts[0] : undefined;
+    if (art) break;
+  }
   if (art) {
     try {
       const r = await call(`${art.url}?token=${encodeURIComponent(pm)}`);

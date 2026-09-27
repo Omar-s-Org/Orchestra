@@ -352,7 +352,7 @@ function workerTask(c: Ctx, id: string) {
   const open = t.status === "done" ? [] : ix.order.blockedBy(id);
   if (open.length) {
     const list = open.map(d => `${d} (${ix.order.status.get(d)})`).join(", ");
-    throw new Locked(`${id} is locked until its prerequisites are done: ${list}. Work on another unlocked task (see next_task) or wait for approval.`);
+    throw new Locked(`${id} is locked until its prerequisites are done: ${list}. Work on another unlocked task (see next_task) or wait until they are done.`);
   }
   return t;
 }
@@ -479,7 +479,7 @@ export function approveMilestone(c: Ctx, id: string, note?: string) {
     const m = c.db.prepare("SELECT id, name, approved_at FROM milestones WHERE id=?").get(id) as { id: string; name: string; approved_at: string | null } | undefined;
     if (!m) throw new NotFound(`Milestone ${id} not found`);
     if (!canApproveMilestone(loadIndex(c.db), c.user, milestoneTasks(c.db).get(id) ?? []))
-      throw new Forbidden(c.user.role === "junior" ? "Juniors (and their agents) can't approve milestones; a senior or the PM must." : `${c.user.name} can only approve milestones whose tasks are all in ${c.user.department}`);
+      throw new Forbidden(c.user.role === "junior" ? "Juniors (and their agents) can't approve milestones; a senior or the PM must." : `${c.user.name} can only approve milestones whose tasks are all in ${c.user.department} and none of them their own; the PM can approve this one`);
     if (m.approved_at) throw new BadRequest(`${m.name} is already signed off`);
     const open = c.db.prepare("SELECT id, status FROM tasks WHERE milestone_id=? AND status != 'done' ORDER BY id").all(id) as { id: string; status: string }[];
     const total = (c.db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE milestone_id=?").get(id) as { n: number }).n;

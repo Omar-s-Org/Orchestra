@@ -61,8 +61,8 @@ Extra detail is opt-in:
 
 **What to check in the UI (as Sara):**
 - Hassan's agent shows live on T-8, and its progress updates appear in the activity feed.
-- T-8 lands in Review with the completion report, `agents_used`, cost and any artifact.
-- Approve it: T-12 unlocks. Ask the agent to "continue"; it should pick up T-12 without extra calls.
+- T-8 lands in Done with the completion report, `agents_used`, cost and any artifact, and T-12 unlocks. Ask the agent to "continue"; it should pick up T-12 without extra calls.
+- When every M-2 task is done, Sara (or the PM) gets a toast and approves the milestone in Review.
 - Refusals are typed. Try "start T-13": the agent gets `Locked (409): …` and should stop, not retry.
 
 ## 4. Measure tokens: old vs new tools (A/B)

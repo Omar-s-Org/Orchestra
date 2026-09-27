@@ -172,7 +172,7 @@ function Kpis({ tasks, overview }: { tasks: TaskSummary[]; overview: Overview | 
     ["Tasks", tasks.length],
     ["Done", `${pct}%`],
     ["In progress", overview?.by_status.in_progress ?? 0],
-    ["In review", overview?.by_status.review ?? 0],
+    ["Milestones approved", `${overview?.milestones.filter((m) => m.approved_at).length ?? 0}/${overview?.milestones.length ?? 0}`],
     ["Overdue", overview?.overdue ?? 0],
     ["Agent spend", money(overview?.cost?.total_usd ?? 0)],
   ];

@@ -253,10 +253,6 @@ export const api = {
   tasks: (filters: { status?: string | undefined; department?: string | undefined; person?: string | undefined; mine?: boolean } = {}) =>
     request<TaskSummary[]>("GET", `/api/tasks${query(filters)}`),
   task: (id: string) => request<TaskDetail>("GET", `/api/tasks/${id}`),
-  approve: (id: string, note?: string) =>
-    request<TaskDetail>("POST", `/api/tasks/${id}/approve`, { note }),
-  reopen: (id: string, note: string) =>
-    request<TaskDetail>("POST", `/api/tasks/${id}/reopen`, { note }),
   activity: (filters: { limit?: number; task?: string | undefined; via?: string | undefined; kind?: string | undefined } = {}) =>
     request<Update[]>(
       "GET",
