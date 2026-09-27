@@ -34,13 +34,13 @@ Teams already hand real work to AI agents: code, research, copy, charts. But pro
 
 **Orchestra** is a shared workspace for that. Every person connects their own agent (Claude Code or any MCP client) with a personal key. The agent picks up its next unlocked task, reports progress as it goes, attaches its results and submits the task. The board updates live, and nobody types a status update.
 
-- 🤖 **Agents report their own work.** What they did, how, which sub-agents they used, what it cost, and the files they produced.
-- 🧑‍💻 **The developer checks every update.** Claude Code shows the agent's summary before each Orchestra update; the developer approves it or sends it back.
-- ✅ **Humans sign off milestones.** When every task in a milestone is done, the PM and the department's senior are notified and approve it in the app.
-- 🔒 **Order is enforced.** A task stays locked until everything it depends on is done, so finishing one piece of work visibly unlocks the next.
-- 👀 **One app, three views.** The PM sees the whole project as a live graph; a senior sees their department, costs and approvals; a junior sees their own and their coworkers' tasks. One server rule decides who sees what.
-- 💸 **Cost without a budgeting tool.** Agents report what each step cost, so spend adds up per person and per department.
-- 🔌 **Open.** MIT licensed, with an MCP server, a REST API and outbound webhooks. Works with whatever agent or tool a team already uses.
+- **Agents report their own work.** What they did, how, which sub-agents they used, what it cost, and the files they produced.
+- **The developer checks every update.** Claude Code shows the agent's summary before each Orchestra update; the developer approves it or sends it back.
+- **Humans sign off milestones.** When every task in a milestone is done, the PM and the department's senior are notified and approve it in the app.
+- **Order is enforced.** A task stays locked until everything it depends on is done, so finishing one piece of work visibly unlocks the next.
+- **One app, three views.** The PM sees the whole project as a live graph; a senior sees their department, costs and approvals; a junior sees their own and their coworkers' tasks. One server rule decides who sees what.
+- **Cost without a budgeting tool.** Agents report what each step cost, so spend adds up per person and per department.
+- **Open.** MIT licensed, with an MCP server, a REST API and outbound webhooks. Works with whatever agent or tool a team already uses.
 
 ---
 
@@ -48,68 +48,66 @@ Teams already hand real work to AI agents: code, research, copy, charts. But pro
 
 ```mermaid
 flowchart TB
-    subgraph CLIENTS["Clients"]
-        direction LR
-        CC["Claude Code / any MCP client<br/><i>Streamable HTTP · Bearer ak_…</i>"]
-        SIM["Simulated agents · server/sim<br/><i>MCP SDK client · scripted stories</i>"]
-        WEB["Web app · web/<br/><i>TanStack Start · React · TanStack Query</i><br/><i>polling 2 s pages · 5 s graph</i>"]
-        STAT["Status page · GET /<br/><i>demo controls · self-test</i>"]
-    end
+    DEV["Developer"]
+    LEAD["PM or senior"]
 
-    subgraph API["Express server · Node 22 · :8787"]
+    subgraph S1["1 · Connect"]
         direction TB
-        subgraph EDGE["Transport"]
-            direction LR
-            MCP["POST /mcp<br/><i>stateless · JSON responses</i><br/>next_task · start_task · report_progress<br/>attach_artifact · submit_task · get_task<br/>team_board · search_kb · read_kb"]
-            REST["/api<br/><i>auth · me · tasks · activity · agents/live</i><br/><i>overview · graph · kb · artifacts</i><br/><i>milestones/:id/approve · webhooks · audit · demo</i>"]
-        end
-        AUTH["auth.ts<br/><i>agent key or session token → user</i>"]
-        PERM["permissions.ts<br/><i>visibility · worker check · KB clearance</i><br/><i>milestone approval rules</i>"]
-        ORD["ordering.ts<br/><i>dependency graph · blocked_by · locked</i>"]
-        SVC["service.ts<br/><i>transactional task + milestone operations</i>"]
-        AUD["audit<br/><i>refused calls</i>"]
-        HOOK["webhooks.ts<br/><i>fire-and-forget POST · 5 s timeout</i>"]
-        MCP --> AUTH
-        REST --> AUTH
-        AUTH --> PERM --> ORD --> SVC
-        PERM -- "403 Forbidden" --> AUD
-        ORD -- "409 Locked" --> AUD
-        SVC --> HOOK
+        CC["Claude Code or any MCP client<br/>Streamable HTTP · agent key"]
+        WEB["Web app<br/>TanStack Start · React · TanStack Query"]
+        SIM["Simulated agents<br/>MCP SDK clients · scripted stories"]
     end
 
-    subgraph DATA["SQLite · better-sqlite3"]
-        direction LR
-        T1[("users · auth_sessions<br/>agent_sessions")]
-        T2[("projects · milestones · tasks<br/>task_people · task_departments<br/>task_links · task_updates")]
-        T3[("kb_docs · task_docs<br/>artifacts")]
-        T4[("webhooks · audit · meta")]
+    subgraph S2["2 · Enter"]
+        direction TB
+        MCP["POST /mcp<br/>stateless · 9 tools"]
+        REST["REST /api<br/>Express · session token"]
+        AUTH["Auth<br/>key or token → user"]
     end
 
-    subgraph EXT["Webhook subscribers"]
-        EV["task.status_changed · task.progress · task.submitted<br/>milestone.ready · milestone.approved"]
+    subgraph S3["3 · Decide"]
+        direction TB
+        PERM["Permission engine<br/>visibility · workers · KB clearance"]
+        ORD["Ordering<br/>dependency graph · locks"]
+        SVC["Task service<br/>start · progress · artifacts · submit · approve"]
+        AUD["Audit log<br/>refused calls"]
     end
 
-    PF["server/projects/*.json<br/><i>project files · seed</i>"]
+    subgraph S4["4 · Store"]
+        DB[("SQLite · better-sqlite3<br/>tasks · milestones · updates<br/>artifacts · KB · audit")]
+        PF["Project files<br/>server/projects/*.json"]
+    end
 
-    CC --> MCP
-    SIM --> MCP
-    WEB --> REST
-    STAT --> REST
-    SVC --> DATA
-    AUD --> T4
-    PF -. "load / reset" .-> DATA
-    HOOK --> EV
+    subgraph S5["5 · Publish"]
+        direction TB
+        LIVE["Live views<br/>board · graph · activity · cost"]
+        HOOK["Webhooks<br/>task.* · milestone.*"]
+    end
 
-    classDef client fill:#f8f9fb,stroke:#adb5bd,color:#1a1a1a
-    classDef edge fill:#e7eefe,stroke:#2f6fed,color:#1a1a1a
-    classDef core fill:#2f6fed,stroke:#1c4fbf,color:#ffffff
-    classDef warn fill:#fff4e6,stroke:#f59f00,color:#1a1a1a
-    classDef store fill:#f1f3f5,stroke:#495057,color:#1a1a1a
-    class CC,SIM,WEB,STAT,PF client
-    class MCP,REST edge
-    class AUTH,PERM,ORD,SVC,HOOK core
-    class AUD warn
-    class T1,T2,T3,T4,EV store
+    DEV -- "task prompt" --> CC
+    CC -- "allow this update?" --> DEV
+    LEAD --> WEB
+
+    CC -- "next_task · start_task<br/>report_progress · submit_task" --> MCP
+    SIM -- "same MCP tools" --> MCP
+    WEB -- "reads · milestone approval" --> REST
+    MCP --> AUTH
+    REST --> AUTH
+
+    AUTH --> PERM
+    PERM --> ORD
+    ORD --> SVC
+    PERM -. "403 Forbidden" .-> AUD
+    ORD -. "409 Locked" .-> AUD
+
+    SVC -- "transactions" --> DB
+    AUD --> DB
+    PF -. "load · reset" .-> DB
+
+    DB --> LIVE
+    SVC -- "status · progress · submitted<br/>ready · approved" --> HOOK
+    LIVE -. "poll 2 s · 5 s" .-> WEB
+    SVC -. "next unlocked task" .-> CC
 ```
 
 ---
