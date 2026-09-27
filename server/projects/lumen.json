@@ -74,7 +74,8 @@
     {
       "id": "M-1",
       "name": "Discovery & design",
-      "due": "2026-09-20"
+      "due": "2026-09-20",
+      "signed_off": true
     },
     {
       "id": "M-2",

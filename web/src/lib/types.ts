@@ -89,7 +89,18 @@ export type LiveAgent = {
 };
 
 export type Overview = {
-  milestones: { id: string; name: string; due: string; total: number; done: number; pct: number }[];
+  milestones: {
+    id: string;
+    name: string;
+    due: string;
+    total: number;
+    done: number;
+    pct: number;
+    /** Milestone sign-off (optional so older servers and mock data still type-check). */
+    approved_at?: string | null;
+    approved_by?: UserRef | null;
+    ready_for_signoff?: boolean;
+  }[];
   by_status: { todo: number; in_progress: number; review: number; done: number };
   overdue: number;
   review_queue: ReviewItem[];

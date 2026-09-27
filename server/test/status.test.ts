@@ -45,7 +45,7 @@ describe("status page and test controls", () => {
     const failed = r.steps.filter((s: { ok: boolean }) => !s.ok);
     expect(failed).toEqual([]);
     expect(r.ok).toBe(true);
-    expect(r.steps.length).toBe(6);
+    expect(r.steps.length).toBe(7);
     const accounts = await (await fetch(`${base}/api/demo/accounts`)).json();
     expect(accounts[0].email).toBe("layla@northwind.test");
   }, 60_000);

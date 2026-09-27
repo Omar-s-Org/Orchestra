@@ -84,6 +84,7 @@ export function createApp(db: DB) {
   });
   // PM setup
   r.post("/milestones", h((c, req) => S.createMilestone(c, req.body ?? {})));
+  r.post("/milestones/:id/approve", h((c, req) => S.approveMilestone(c, p(req, "id"), req.body?.note)));
   r.post("/tasks", h((c, req) => S.createTask(c, req.body ?? {})));
   r.post("/kb", h((c, req) => S.createDoc(c, req.body ?? {})));
   r.post("/webhooks", h((c, req) => S.addWebhook(c, req.body ?? {})));

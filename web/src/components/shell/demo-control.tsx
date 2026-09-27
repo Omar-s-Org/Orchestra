@@ -58,8 +58,12 @@ export function DemoControl({ me }: { me: Me }) {
     if (wasRunning.current && !s.running) {
       if (s.end_reason?.startsWith("complete")) {
         toast.success("Demo complete: the beta milestone shipped.", {
-          description: "Open the graph or the Company view.",
-          action: { label: "Graph", onClick: () => void navigate({ to: "/graph" }) },
+          description: isPm
+            ? "Sign off the milestone in Review."
+            : "Open the board to see the result.",
+          action: isPm
+            ? { label: "Review →", onClick: () => void navigate({ to: "/review" }) }
+            : { label: "Board", onClick: () => void navigate({ to: "/board" }) },
         });
       } else if (s.end_reason) {
         toast(`Demo ended: ${s.end_reason}`);
@@ -67,7 +71,7 @@ export function DemoControl({ me }: { me: Me }) {
       void qc.invalidateQueries();
     }
     wasRunning.current = s.running;
-  }, [s, me.capabilities.review, navigate, qc]);
+  }, [s, me.capabilities.review, isPm, navigate, qc]);
 
   const onError = (e: unknown) =>
     toast.error(e instanceof ApiError ? e.message : "Something went wrong");

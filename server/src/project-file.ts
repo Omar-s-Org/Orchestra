@@ -21,7 +21,7 @@ export const ProjectFile = z.object({
     email: z.string().email().optional(), title: z.string().default(""),
     password: z.string().min(4).optional(), agent_key: z.string().min(8).optional(),
   })).min(1),
-  milestones: z.array(z.object({ id, name: z.string().min(1), due: date.optional() })).min(1),
+  milestones: z.array(z.object({ id, name: z.string().min(1), due: date.optional(), signed_off: z.boolean().default(false) })).min(1),
   docs: z.array(z.object({ id, title: z.string().min(1), body: z.string().min(1), min_role: role.default("junior"), author: id })).default([]),
   tasks: z.array(z.object({
     id, title: z.string().min(1), milestone: id, parent: id.optional(), due: date.optional(), status: status.default("todo"),
@@ -69,6 +69,10 @@ export function validateProject(raw: unknown): ProjectFile {
     t.depends_on.forEach(d => ref(tasks.has(d) && d !== t.id, `tasks.${t.id}.depends_on: unknown task "${d}"`));
     t.docs.forEach(d => ref(docs.has(d), `tasks.${t.id}.docs: unknown doc "${d}"`));
   }
+  p.milestones.filter(m => m.signed_off).forEach(m => {
+    const open = p.tasks.filter(t => t.milestone === m.id && t.status !== "done").map(t => t.id);
+    ref(open.length === 0, `milestones.${m.id}.signed_off: tasks not done yet (${open.join(", ")})`);
+  });
   const cycle = findCycle(new Map(p.tasks.map(t => [t.id, t.depends_on])));
   if (cycle) problems.push(`tasks: circular prerequisites ${cycle.join(" → ")} (nothing in this loop could ever start)`);
   p.history.forEach((h, i) => { ref(tasks.has(h.task), `history[${i}].task: unknown task "${h.task}"`); ref(people.has(h.user), `history[${i}].user: unknown person "${h.user}"`); });
@@ -95,8 +99,9 @@ export function loadProject(db: DB, raw: unknown, sourcePath?: string) {
     for (const u of p.people) createUserRow(db, { id: u.id, name: u.name, email: u.email ?? `${u.id}@example.test`, password: u.password ?? "demo1234",
       title: u.title, department: u.department, role: u.role, agentKey: u.agent_key ?? defaultAgentKey(u.id) });
     db.prepare("INSERT INTO projects VALUES (?,?,?)").run(p.project.id, p.project.name, p.project.description);
-    for (const m of p.milestones) db.prepare("INSERT INTO milestones VALUES (?,?,?,?)").run(m.id, p.project.id, m.name, m.due ?? null);
     const pm = p.people.find(x => x.role === "pm")!.id;
+    for (const m of p.milestones) db.prepare("INSERT INTO milestones (id, project_id, name, due, approved_at, approved_by) VALUES (?,?,?,?,?,?)")
+      .run(m.id, p.project.id, m.name, m.due ?? null, m.signed_off ? ago(60 * 24) : null, m.signed_off ? pm : null);
     for (const d of p.docs) db.prepare("INSERT INTO kb_docs (id,project_id,title,body,min_role,author_id,created_at) VALUES (?,?,?,?,?,?,?)")
       .run(d.id, p.project.id, d.title, d.body, d.min_role, d.author, now());
     // Parents first so subtasks can reference them.

@@ -92,6 +92,16 @@ export async function runSelfTest(baseUrl: string, opts: { password?: string; ti
     throw new Error("timed out");
   });
 
+  await step("The PM signs off the finished milestone", async () => {
+    const ov = must(await call("/api/overview", pm), "overview");
+    const ready = (ov.milestones as { id: string; name: string; ready_for_signoff: boolean }[]).filter(m => m.ready_for_signoff);
+    if (!ready.length) throw new Error("no milestone is ready for sign-off after the demo");
+    const r = await call(`/api/milestones/${ready[0].id}/approve`, senior, {});
+    if (r.status !== 403) throw new Error(`a senior could sign off (HTTP ${r.status})`);
+    must(await call(`/api/milestones/${ready[0].id}/approve`, pm, {}), `sign off ${ready[0].id}`);
+    return `${ready[0].name} signed off; a senior's sign-off was refused`;
+  });
+
   await step("Put the Northwind demo back", async () => {
     must(await call("/api/demo/load", pm, { project: "northwind" }), "load northwind");
   });

@@ -238,10 +238,17 @@ export function overview(c: Ctx) {
   const by_status = { todo: 0, in_progress: 0, review: 0, done: 0 };
   const byMilestone = new Map<string, TaskRow[]>();
   for (const t of tasks) { by_status[t.status]++; byMilestone.set(t.milestone_id, [...(byMilestone.get(t.milestone_id) ?? []), t]); }
-  const milestones = (c.db.prepare("SELECT id, name, due FROM milestones ORDER BY due").all() as { id: string; name: string; due: string }[]).map(m => {
+  // Sign-off state uses every task in the milestone, not only the ones this person can see.
+  const allOpen = new Map((c.db.prepare("SELECT milestone_id, COUNT(*) AS total, SUM(status = 'done') AS done FROM tasks GROUP BY milestone_id").all() as { milestone_id: string; total: number; done: number }[]).map(r => [r.milestone_id, r]));
+  const milestones = (c.db.prepare("SELECT id, name, due, approved_at, approved_by FROM milestones ORDER BY due").all() as { id: string; name: string; due: string; approved_at: string | null; approved_by: string | null }[]).map(({ approved_at, approved_by, ...m }) => {
     const ts = byMilestone.get(m.id) ?? [];
     const done = ts.filter(t => t.status === "done").length;
-    return { ...m, total: ts.length, done, pct: ts.length ? Math.round((done / ts.length) * 100) : 0 };
+    const all = allOpen.get(m.id);
+    return {
+      ...m, total: ts.length, done, pct: ts.length ? Math.round((done / ts.length) * 100) : 0,
+      approved_at, approved_by: approved_by ? ref(approved_by) : null,
+      ready_for_signoff: !approved_at && !!all && all.total > 0 && all.done === all.total,
+    };
   });
   const review_queue = tasks.filter(t => t.status === "review" && canApprove(ix, c.user, t.id)).map(t => reviewItem(c, ix, t, L));
   let cost = null;
@@ -482,6 +489,24 @@ function nextId(db: DB, table: "milestones" | "kb_docs", prefix: string) {
   const ids = (db.prepare(`SELECT id FROM ${table}`).all() as { id: string }[]).map(r => r.id);
   const max = Math.max(0, ...ids.filter(id => id.startsWith(prefix)).map(id => Number(id.slice(prefix.length)) || 0));
   return `${prefix}${max + 1}`;
+}
+
+/** The PM signs off a milestone once every task in it is done (approved). */
+export function approveMilestone(c: Ctx, id: string, note?: string) {
+  return guarded(c, "approve_milestone", id, () => {
+    if (c.user.role !== "pm") throw new Forbidden("Only the PM can sign off a milestone");
+    const m = c.db.prepare("SELECT id, name, approved_at FROM milestones WHERE id=?").get(id) as { id: string; name: string; approved_at: string | null } | undefined;
+    if (!m) throw new NotFound(`Milestone ${id} not found`);
+    if (m.approved_at) throw new BadRequest(`${m.name} is already signed off`);
+    const open = c.db.prepare("SELECT id, status FROM tasks WHERE milestone_id=? AND status != 'done' ORDER BY id").all(id) as { id: string; status: string }[];
+    const total = (c.db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE milestone_id=?").get(id) as { n: number }).n;
+    if (!total) throw new BadRequest(`${m.name} has no tasks to sign off`);
+    if (open.length) throw new Locked(`${m.name} still has open tasks: ${open.map(t => `${t.id} (${t.status})`).join(", ")}`);
+    const at = now();
+    c.db.prepare("UPDATE milestones SET approved_at=?, approved_by=? WHERE id=?").run(at, c.user.id, id);
+    emit(c.db, "milestone.approved", { milestone_id: id, by: c.user.id, note: note?.trim() || null });
+    return { id, name: m.name, approved_at: at, approved_by: userRefs(c.db)(c.user.id) };
+  });
 }
 
 export function createMilestone(c: Ctx, m: { name: string; due?: string }) {

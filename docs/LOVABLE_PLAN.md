@@ -107,6 +107,7 @@ type TaskDetail = TaskSummary & {
 | GET | `/api/tasks` | `?status=&department=&person=<userId>&mine=true` (all optional, combinable) | `TaskSummary[]` |
 | GET | `/api/tasks/:id` | none | `TaskDetail` |
 | POST | `/api/tasks/:id/approve` | `{ note? }` | `TaskDetail` (review → done) |
+| POST | `/api/milestones/:id/approve` | `{ note? }` | `{ id, name, approved_at, approved_by }`. **PM only** (403 otherwise); 409 while any task in the milestone isn't done; 400 if already signed off. Section 13 |
 | POST | `/api/tasks/:id/reopen` | `{ note }` | `TaskDetail` (review → in_progress) |
 | GET | `/api/activity` | `?limit=50&task=&via=agent\|ui&kind=progress\|completion\|approval\|status` (all optional) | `Update[]` newest first |
 | GET | `/api/agents/live` | none | `{ user: UserRef, agent_name: string, status: "active" \| "idle", task: {id,title} \| null, activity: string, last_seen: string }[]` |
@@ -123,7 +124,9 @@ type TaskDetail = TaskSummary & {
 `GET /api/overview`:
 ```ts
 {
-  milestones: { id: string; name: string; due: string; total: number; done: number; pct: number }[];
+  milestones: { id: string; name: string; due: string; total: number; done: number; pct: number;
+    approved_at: string | null; approved_by: UserRef | null;   // PM sign-off (section 13)
+    ready_for_signoff: boolean }[];                            // every task done and not signed off yet
   by_status: { todo: number; in_progress: number; review: number; done: number };
   overdue: number;                                   // visible tasks past due and not done
   review_queue: ReviewItem[];                        // tasks in review I can approve (empty for juniors)
@@ -430,3 +433,10 @@ type DemoStatus = {
 - [ ] Each submit shows up within 2 s as a Review badge and toast; approving unlocks the next wave.
 - [ ] The run ends by itself with "Demo complete" at 10/10.
 - [ ] The login quick-fill lists `@lumen.test` accounts after a run.
+
+## 13. Milestone sign-off (PM)
+When every task in a milestone is done (each one approved), the **PM signs off the milestone** to close it.
+- **Review page, PM only:** above the task queue, show one card per `overview.milestones` item with `ready_for_signoff: true`: *"Milestone ready for sign-off: {name}. All {total} tasks are done and approved."* Clicking [Sign off milestone] reveals an optional note and [Confirm sign-off], which calls `POST /api/milestones/:id/approve`. Then show a toast "{name} signed off" and refetch everything.
+- **Top bar milestone strip:** put a green ✓ before the name when `approved_at` is set; the tooltip adds "signed off" or "ready for sign-off".
+- **Run demo:** when the run completes, the PM's toast says "Sign off the milestone in Review" and links to Review. This is the last beat of the video.
+- Project files may mark finished milestones as already signed off (`"signed_off": true`; see docs/PROJECT_FORMAT.md). In Lumen, M-1 "Discovery & design" starts signed off.

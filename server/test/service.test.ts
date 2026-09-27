@@ -182,6 +182,29 @@ describe("graph", () => {
   });
 });
 
+describe("milestone sign-off", () => {
+  const finish = (m: string) => db.prepare("UPDATE tasks SET status='done' WHERE milestone_id=?").run(m);
+  const ms = (who: string, id: string) => S.overview(ui(who)).milestones.find(m => m.id === id)!;
+
+  it("only the PM signs off, and only once every task in the milestone is done", () => {
+    expect(ms("layla", "M-1")).toMatchObject({ ready_for_signoff: false, approved_at: null });
+    expect(() => S.approveMilestone(ui("layla"), "M-1")).toThrow(/still has open tasks: T-/);
+    finish("M-1");
+    expect(ms("layla", "M-1").ready_for_signoff).toBe(true);
+    expect(() => S.approveMilestone(ui("sara"), "M-1")).toThrow(/Only the PM/);
+    const r = S.approveMilestone(ui("layla"), "M-1", "Great work");
+    expect(r).toMatchObject({ id: "M-1", approved_by: { id: "layla" } });
+    expect(ms("john", "M-1")).toMatchObject({ ready_for_signoff: false, approved_by: { id: "layla" } });
+    expect(() => S.approveMilestone(ui("layla"), "M-1")).toThrow(/already signed off/);
+    expect(() => S.approveMilestone(ui("layla"), "M-9")).toThrow(/not found/);
+  });
+
+  it("refusals are audited", () => {
+    try { S.approveMilestone(ui("sara"), "M-1"); } catch { /* expected */ }
+    expect(S.auditLog(ui("layla")).some((a: any) => a.action === "approve_milestone" && a.allowed === 0)).toBe(true);
+  });
+});
+
 describe("presence without pings", () => {
   const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
   const session = (user: string, task: string | null, minutes: number) =>
