@@ -204,17 +204,7 @@ docs/             Guides, specs and plans
 
 **Docs:** [Development](docs/DEVELOPMENT.md) · [Integrations](docs/INTEGRATIONS.md) · [Live demo runbook](docs/LIVE_DEMO.md) · [Agent testing](docs/AGENT_TESTING.md) · [Deploy](docs/DEPLOY.md) · [Project format](docs/PROJECT_FORMAT.md) · [API + UI spec](docs/LOVABLE_PLAN.md) · [Product plan](docs/MVP_PLAN.md) · [Backlog](docs/BACKLOG.md)
 
----
 
-## Team
-
-| | Built |
-|---|---|
-| **Omar** | Backend core: schema, REST API, MCP server, permissions, hosting, demo runner |
-| **Saad** | Web app (Lovable): board, graph, task drawer, review, company view |
-| **Hassan** | Demo projects, simulated agents, webhooks, docs |
-
----
 
 <p align="center">
   <sub>Orchestra · open source under the <a href="LICENSE">MIT license</a> · hackathon prototype</sub>
