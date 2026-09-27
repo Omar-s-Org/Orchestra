@@ -12,7 +12,7 @@ For Hassan (and anyone checking that a *real* agent works our tools the way the 
    - **Junior (`john@…`, `priya@…`):** only your own and junior coworkers' tasks. Review and Graph aren't in the menu.
 3. **The live demo:** on the status page, click **Run Lumen demo**.
    - In the app, log in as `sara@lumen.test`.
-   - The 4 simulated agents (Priya, John, Omar, you) submit wave 1, and it shows up in **Review**. Approve it, and the next wave unlocks. After 3 waves the status page says "complete".
+   - The 4 simulated agents (Priya, John, Omar, you) work through milestone M-2. Each submitted task is done at once and unlocks the tasks that wait on it. When the last task is done, a toast says the milestone is ready: open **Review**, click *Approve milestone*, then *Confirm approval*.
    - **Stop** ends it; **Load Northwind** brings back the static demo.
 4. Send Omar feedback on anything broken, confusing or slow: a screenshot, the URL, and the account you used.
 
@@ -82,7 +82,7 @@ claude -p "Work your next Orchestra task." --output-format json --allowedTools "
 Reset the data (`npm run load -- projects/lumen.json`) before each run so both start from the same state.
 
 Record the results in the table below:
-- Did the task reach Review with an explanation, `agents_used` and cost?
+- Was the task submitted (status done) with an explanation, `agents_used` and cost?
 - The number of tool calls (from the activity feed, or `GET /api/audit` as the PM).
 - The token and cost totals from the JSON output.
 
