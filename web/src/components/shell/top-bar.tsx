@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Building2, Info, Moon, Sun } from "lucide-react";
+import { Building2, Info, Moon, Sun } from "lucide-react";
 
 import { Logo } from "@/components/logo";
 import { SourcePill } from "@/components/source-pill";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCompanyView } from "@/hooks/use-company-view";
@@ -14,14 +13,13 @@ import { overviewQuery } from "@/lib/queries";
 import type { Me } from "@/lib/types";
 
 import { DemoControl } from "./demo-control";
-import { LiveAgentsList, useActiveAgentCount } from "./live-agents";
 import { UserMenu } from "./user-menu";
 
 function MilestoneStrip() {
   const { data } = useQuery(overviewQuery());
   if (!data) return null;
   return (
-    <div className="hidden items-center gap-4 lg:flex">
+    <div className="hidden items-center gap-4 xl:flex">
       {data.milestones.map((m) => (
         <div
           key={m.id}
@@ -48,7 +46,6 @@ export function TopBar({ me }: { me: Me }) {
   const { theme, toggle } = useTheme();
   const { enabled: companyView, setEnabled: setCompanyView } = useCompanyView();
   const navigate = useNavigate();
-  const active = useActiveAgentCount();
 
   function changeCompanyView(enabled: boolean) {
     setCompanyView(enabled);
@@ -91,22 +88,6 @@ export function TopBar({ me }: { me: Me }) {
         ) : null}
         <DemoControl me={me} />
         <SourcePill />
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative min-[1440px]:hidden" aria-label="Live agents">
-              <Bot className="size-4" />
-              {active > 0 ? (
-                <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-agent text-[10px] font-semibold text-agent-foreground">
-                  {active}
-                </span>
-              ) : null}
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-80 p-0">
-            <SheetTitle className="sr-only">Live agents</SheetTitle>
-            <LiveAgentsList />
-          </SheetContent>
-        </Sheet>
         <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle dark mode">
           {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>

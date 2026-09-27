@@ -18,7 +18,8 @@ export function useAuthGuard(): { me: Me | undefined; ready: boolean } {
   const { data: me } = useQuery({ ...meQuery(), enabled: Boolean(token) });
 
   useEffect(() => {
-    if (!token) void navigate({ to: "/login", search: { next: href }, replace: true });
+    // Never wrap the login page in itself (that loops: /login?next=/login?next=…).
+    if (!token && !href.startsWith("/login")) void navigate({ to: "/login", search: { next: href }, replace: true });
   }, [href, navigate, token]);
 
   return { me, ready: Boolean(token && me) };

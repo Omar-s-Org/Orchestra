@@ -194,14 +194,22 @@ function TaskCard({ t, nextUp }: { t: TaskSummary; nextUp: boolean }) {
         <span className="ml-auto truncate">{t.milestone.name}</span>
       </div>
       <p className="mt-1 text-sm leading-snug font-medium">{t.title}</p>
-      {t.locked && t.blocked_by?.[0] ? (
-        <p className="mt-1 text-[11px] text-muted-foreground">Waiting on {t.blocked_by[0].id}</p>
+      {t.locked && t.blocked_by?.length ? (
+        <p className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+          <Lock className="size-3" />
+          Locked · waiting on {t.blocked_by.map((b) => b.id).join(", ")}
+        </p>
       ) : null}
       {t.live ? (
-        <p className="mt-1.5 truncate text-[11px] text-agent">
-          <Bot className="mr-1 inline size-3" />
-          {t.live.agent_name}: {t.live.activity}
-        </p>
+        <div className="mt-2 flex items-center gap-1.5 rounded-md border border-agent/40 bg-agent/10 px-2 py-1 text-[11px] text-agent">
+          <span className="relative flex size-2 shrink-0">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-agent opacity-60" />
+            <span className="relative inline-flex size-2 rounded-full bg-agent" />
+          </span>
+          <Bot className="size-3 shrink-0" />
+          <span className="shrink-0 font-medium">{t.live.agent_name}</span>
+          <span className="truncate opacity-80">· {t.live.activity}</span>
+        </div>
       ) : null}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {t.departments.map((d) => (

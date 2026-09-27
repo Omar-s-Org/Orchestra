@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useSearchValues, useSetSearch } from "@/hooks/use-search";
 import { relativeTime } from "@/lib/format";
 import { kbQuery } from "@/lib/queries";
+import { RelativeTime } from "@/components/relative-time";
 
 export const Route = createFileRoute("/_shell/knowledge/")({
   head: () => ({
@@ -61,7 +62,7 @@ function KnowledgePage() {
                 </div>
                 <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{d.excerpt}</p>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {d.author.name} · {relativeTime(d.created_at)}
+                  {d.author.name} · <RelativeTime iso={d.created_at} />
                 </p>
               </Link>
             </li>

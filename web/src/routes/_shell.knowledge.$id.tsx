@@ -7,6 +7,7 @@ import { RoleBadge } from "@/components/role-badge";
 import { useOpenTask } from "@/hooks/use-task-param";
 import { relativeTime } from "@/lib/format";
 import { kbDocQuery } from "@/lib/queries";
+import { RelativeTime } from "@/components/relative-time";
 
 export const Route = createFileRoute("/_shell/knowledge/$id")({
   head: () => ({
@@ -41,7 +42,7 @@ function DocPage() {
             </div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">{data.title}</h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              {data.author.name} · {relativeTime(data.created_at)}
+              {data.author.name} · <RelativeTime iso={data.created_at} />
             </p>
           </header>
           <article className="rounded-xl border bg-card p-6">

@@ -15,6 +15,7 @@ import { money, relativeTime } from "@/lib/format";
 import { meQuery, overviewQuery } from "@/lib/queries";
 import type { Overview, ReviewItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 
 export const Route = createFileRoute("/_shell/review")({
   head: () => ({
@@ -144,7 +145,7 @@ function ReviewRow({ item }: { item: ReviewItem }) {
       {c ? (
         <div className="mt-3 rounded-lg border border-agent/30 bg-agent/5 p-3">
           <p className="mb-1 text-xs text-muted-foreground">
-            {c.agent_name ?? c.user.name} · {relativeTime(c.created_at)}
+            {c.agent_name ?? c.user.name} · <RelativeTime iso={c.created_at} />
           </p>
           <div className={cn(!expanded && "line-clamp-4")}>
             <Markdown>{c.summary}</Markdown>

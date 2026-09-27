@@ -1,20 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/logo";
-import { RoleBadge } from "@/components/role-badge";
 import { SourcePill } from "@/components/source-pill";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDataSource, useSourceMonitor } from "@/hooks/use-data-source";
 import { ApiError, api, getToken, setToken } from "@/lib/api";
-import { DEMO_ACCOUNTS, MOCK_PASSWORD } from "@/lib/mock";
-import { cn } from "@/lib/utils";
+import { DEMO_ACCOUNTS } from "@/lib/mock";
 
 type Search = { next?: string | undefined };
 
@@ -37,14 +34,14 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { next } = Route.useSearch();
+  const search = Route.useSearch();
+  const next = search.next?.startsWith("/login") ? undefined : search.next;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   useSourceMonitor();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [openDemo, setOpenDemo] = useState(true);
   // Live: the accounts of whichever project the backend has loaded (Northwind, Lumen after Run demo…).
   const { source } = useDataSource();
   const liveAccounts = useQuery({
@@ -55,6 +52,11 @@ function LoginPage() {
   });
   const accounts =
     source === "live" && liveAccounts.data?.length ? liveAccounts.data : DEMO_ACCOUNTS;
+  // Pre-fill the project manager of whichever project is loaded (layla@lumen.test after Run demo).
+  const pmEmail = accounts.find((a) => a.role === "pm")?.email;
+  useEffect(() => {
+    if (pmEmail) setEmail((current) => current || pmEmail);
+  }, [pmEmail]);
 
   // Already signed in: go straight to the landing page.
   useEffect(() => {
@@ -89,7 +91,7 @@ function LoginPage() {
             <Logo size={34} />
             <div className="leading-tight">
               <p className="text-base font-semibold tracking-tight">Orchestra</p>
-              <p className="text-xs text-muted-foreground">Northwind Launch</p>
+              <p className="text-xs text-muted-foreground">AI agents, one live project</p>
             </div>
           </div>
           <SourcePill />
@@ -118,7 +120,7 @@ function LoginPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="you@northwind.test"
+                placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -140,41 +142,6 @@ function LoginPage() {
             </Button>
           </form>
 
-          <Collapsible open={openDemo} onOpenChange={setOpenDemo} className="mt-5 border-t pt-4">
-            <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium">
-              Demo accounts
-              <ChevronDown
-                className={cn("size-4 text-muted-foreground transition-transform", openDemo && "rotate-180")}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-3 space-y-1.5">
-              <p className="text-xs text-muted-foreground">
-                Password for every account: <code className="rounded bg-muted px-1 py-0.5">{MOCK_PASSWORD}</code>
-              </p>
-              <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
-                {accounts.map((account) => (
-                  <li key={account.email}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmail(account.email);
-                        setPassword(MOCK_PASSWORD);
-                      }}
-                      className="flex w-full items-center justify-between gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors hover:border-border hover:bg-surface"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">{account.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {account.email} · {account.department}
-                        </span>
-                      </span>
-                      <RoleBadge role={account.role} short />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </CollapsibleContent>
-          </Collapsible>
         </div>
 
         <p className="mt-6 flex justify-center">

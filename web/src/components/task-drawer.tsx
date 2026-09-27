@@ -17,6 +17,7 @@ import { artifactUrl } from "@/lib/api";
 import { money, relativeTime, STATUS_LABEL } from "@/lib/format";
 import { taskQuery } from "@/lib/queries";
 import type { Artifact, Status, TaskDetail, Update, UserRef } from "@/lib/types";
+import { RelativeTime } from "@/components/relative-time";
 
 /** Task drawer driven by ?task=<id> on any signed-in page. */
 export function TaskDrawer() {
@@ -88,7 +89,7 @@ function DrawerBody({ id }: { id: string }) {
             <Bot className="size-3.5" />
             <span className="font-medium">{t.live.agent_name}:</span>
             <span className="truncate">{t.live.activity}</span>
-            <span className="ml-auto shrink-0 opacity-75">{relativeTime(t.live.since)}</span>
+            <span className="ml-auto shrink-0 opacity-75"><RelativeTime iso={t.live.since} /></span>
           </div>
         ) : null}
       </div>
@@ -264,7 +265,7 @@ export function FileGrid({ artifacts }: { artifacts: Artifact[] }) {
           <div className="p-2 text-xs">
             <p className="truncate font-medium">{a.name}</p>
             <p className="text-muted-foreground">
-              {a.user.name} · {relativeTime(a.created_at)}
+              {a.user.name} · <RelativeTime iso={a.created_at} />
             </p>
           </div>
         </a>

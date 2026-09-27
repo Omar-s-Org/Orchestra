@@ -7,6 +7,7 @@ import { RoleBadge } from "@/components/role-badge";
 import { absoluteTime, initials, money, relativeTime, STATUS_LABEL } from "@/lib/format";
 import type { Status, Update, UserRef } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 
 export const STATUS_DOT: Record<Status, string> = {
   todo: "bg-muted-foreground/60",
@@ -128,7 +129,7 @@ export function UpdateCard({
           </Chip>
         ) : null}
         <span className="ml-auto text-muted-foreground" title={absoluteTime(update.created_at)}>
-          {relativeTime(update.created_at)}
+          <RelativeTime iso={update.created_at} />
         </span>
       </header>
       {taskLink ? <div className="mt-2 text-sm">{taskLink}</div> : null}
