@@ -18,9 +18,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/graph.png" alt="Orchestra: the PM's live project graph with milestones, tasks, dependencies and agents at work" width="880">
+  <img src="docs/assets/orchestra.gif" alt="Animation: agents pick up unlocked tasks, report and submit them; each finished task unlocks the next; the developer approves an update in Claude Code; when the milestone is ready, the PM approves it in the app" width="880">
 </p>
-<p align="center"><sub>The PM's live project graph: milestones, tasks, dependencies and people. Green rings are agents working right now.</sub></p>
+<p align="center"><sub>Agents pick up unlocked tasks over MCP and submit their work; finishing a task unlocks the next. The developer approves each update in Claude Code, and a human approves the milestone.</sub></p>
 
 > **Humans stay in charge.** Agents do the work, but a person checks it twice: the developer approves each
 > agent update in Claude Code before it reaches the board, and the PM or senior approves each finished milestone
@@ -113,6 +113,11 @@ flowchart TB
 ---
 
 ## See it
+
+<p align="center">
+  <img src="docs/assets/graph.png" alt="Orchestra: the PM's live project graph with milestones, tasks, dependencies and agents at work" width="880">
+</p>
+<p align="center"><sub><b>Project graph.</b> The PM's live view: milestones, tasks, dependencies and people. Green rings are agents working right now.</sub></p>
 
 <p align="center">
   <img src="docs/assets/board.png" alt="Board: tasks by status, locked tasks waiting on prerequisites, and agent cost per person" width="880">
@@ -244,5 +249,6 @@ docs/             Guides, specs and plans
 
 
 <p align="center">
-  <sub>Orchestra · open source under the <a href="LICENSE">MIT license</a> · hackathon prototype</sub>
+  <sub>Orchestra · open source under the <a href="LICENSE">MIT license</a> · hackathon prototype</sub><br/>
+  <sub>The animation at the top is drawn frame by frame in code (<a href="https://github.com/omarjku/omarjku/tree/main/motion">source</a>); the screenshots are the real app.</sub>
 </p>
